@@ -78,13 +78,13 @@ public class RegistryGenerator {
 
     public void generate() throws IOException {
         try {
-            Map<String, GeneratedEntity> generatedEntities = new HashMap<>();
+            Map<String, GeneratedDao> generatedEntities = new HashMap<>();
             List<GeneratedQuery> generatedQueries = new ArrayList<>();
 
             roundEnvironment.getElementsAnnotatedWith(Entity.class).forEach(e -> {
                         try {
-                            EntityGenerator generator = new EntityGenerator(this, e);
-                            GeneratedEntity generated = generator.generate();
+                            DaoGenerator generator = new DaoGenerator(this, e);
+                            GeneratedDao generated = generator.generate();
                             generatedEntities.put(generated.getQualifiedName(), generated);
                         } catch (IOException exception) {
                             throw new UncheckedIOException(exception);
@@ -115,7 +115,7 @@ public class RegistryGenerator {
 
                 codeBuilder.indent().indent();
                 generatedQueries.stream()
-                        .filter(q -> q.getEntity().equals(e))
+                        .filter(q -> q.getDao().equals(e))
                         .forEach(q -> codeBuilder.add("\n.query($T.class, new $T(dao))", q.getInterface(), q.getImplementation()));
                 codeBuilder.unindent().unindent().add("\n");
 

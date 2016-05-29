@@ -36,13 +36,15 @@ import java.util.List;
 
 @SuppressWarnings("unused")
 @NotThreadSafe
-public abstract class AbstractDao<E> {
+public abstract class Dao<E> {
 
     private final StringBuilder tmp = new StringBuilder();
 
     private final LongWeakValueIdentityHashMap<E> cache = new LongWeakValueIdentityHashMap<>();
 
     private final SQLiteDatabase db;
+
+    private final int sinceVersion;
 
     private int idColumnIndex = -1;
 
@@ -54,8 +56,9 @@ public abstract class AbstractDao<E> {
 
     private SQLiteStatement updateStatement = null;
 
-    protected AbstractDao(SQLiteDatabase db) {
+    protected Dao(SQLiteDatabase db, int sinceVersion) {
         this.db = db;
+        this.sinceVersion = sinceVersion;
     }
 
     protected abstract String getTableName();
@@ -78,6 +81,10 @@ public abstract class AbstractDao<E> {
             this.properties = properties;
         }
         return properties;
+    }
+
+    public int getSinceVersion() {
+        return sinceVersion;
     }
 
     public E fromCursor(Cursor cursor) {
@@ -257,6 +264,10 @@ public abstract class AbstractDao<E> {
         db.execSQL(createTable(false));
     }
 
+    public void ensureTable() {
+        db.execSQL(createTable(true));
+    }
+
     private String createTable(boolean ifNotExists) {
         tmp.append("CREATE TABLE ");
         if (ifNotExists) {
@@ -264,8 +275,9 @@ public abstract class AbstractDao<E> {
         }
         tmp.append('\'').append(getTableName()).append('\'').append('(');
         for (Property<E> property : propertiesArray()) {
-            //TODO nullable/not null
-            tmp.append(property.getColumnName()).append(' ').append(property.getColumnType()).append(',');
+            tmp.append(property.getColumnName()).append(' ')
+                    .append(property.getColumnType()).append(' ')
+                    .append(property.getColumnExtraDefinition()).append(',');
         }
         tmp.setLength(tmp.length() - 1);
         tmp.append(')');

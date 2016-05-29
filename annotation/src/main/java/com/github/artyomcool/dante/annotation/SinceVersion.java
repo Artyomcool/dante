@@ -20,37 +20,15 @@
  * SOFTWARE.
  */
 
-package com.github.artyomcool.dante;
+package com.github.artyomcool.dante.annotation;
 
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.TypeName;
-import com.squareup.javapoet.TypeSpec;
 
-import javax.lang.model.element.Element;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
 
-public class GeneratedQuery {
+@Target(ElementType.FIELD)
+public @interface SinceVersion {
 
-    private final QueriesGenerator queriesGenerator;
-    private final TypeSpec typeSpec;
+    int value();
 
-    public GeneratedQuery(QueriesGenerator queriesGenerator, TypeSpec typeSpec) {
-        this.queriesGenerator = queriesGenerator;
-        this.typeSpec = typeSpec;
-    }
-
-    public GeneratedDao getDao() {
-        return queriesGenerator.getDao();
-    }
-
-    public TypeSpec getTypeSpec() {
-        return typeSpec;
-    }
-
-    public Element getInterface() {
-        return queriesGenerator.getQueriesElement();
-    }
-
-    public TypeName getImplementation() {
-        return ClassName.get(RegistryGenerator.getPackage(getInterface()), typeSpec.name);
-    }
 }

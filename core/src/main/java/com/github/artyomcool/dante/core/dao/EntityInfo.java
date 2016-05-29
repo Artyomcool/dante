@@ -29,10 +29,10 @@ import java.util.Map;
 public class EntityInfo<E> {
 
     private final Class<E> clazz;
-    private final AbstractDao<E> dao;
+    private final Dao<E> dao;
     private final Map<Class<?>, Object> queries = new HashMap<>();
 
-    public EntityInfo(Class<E> clazz, AbstractDao<E> dao) {
+    public EntityInfo(Class<E> clazz, Dao<E> dao) {
         this.clazz = clazz;
         this.dao = dao;
     }
@@ -46,7 +46,7 @@ public class EntityInfo<E> {
         return clazz;
     }
 
-    public AbstractDao<E> getDao() {
+    public Dao<E> getDao() {
         return dao;
     }
 

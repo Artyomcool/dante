@@ -26,18 +26,17 @@ import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.TypeSpec;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.QualifiedNameable;
 import javax.lang.model.element.VariableElement;
 import java.util.NoSuchElementException;
 
 import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
 
-public class GeneratedEntity {
+public class GeneratedDao {
 
-    private final EntityGenerator generator;
+    private final DaoGenerator generator;
     private final TypeSpec dao;
 
-    public GeneratedEntity(EntityGenerator generator, TypeSpec dao) {
+    public GeneratedDao(DaoGenerator generator, TypeSpec dao) {
         this.generator = generator;
         this.dao = dao;
     }

@@ -26,6 +26,6 @@ public interface Registry {
 
     <T> T queries(Class<T> clazz);
 
-    <T> AbstractDao<T> dao(Class<T> clazz);
+    <T> Dao<T> dao(Class<T> clazz);
 
 }

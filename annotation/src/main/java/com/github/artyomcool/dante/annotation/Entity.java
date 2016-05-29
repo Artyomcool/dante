@@ -28,6 +28,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Entity {
 
-    String param() default "!@#";
+    int sinceVersion() default 1;
 
 }

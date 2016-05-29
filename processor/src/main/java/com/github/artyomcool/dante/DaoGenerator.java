@@ -22,8 +22,9 @@
 
 package com.github.artyomcool.dante;
 
+import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
-import com.github.artyomcool.dante.core.dao.AbstractDao;
+import com.github.artyomcool.dante.core.dao.Dao;
 import com.github.artyomcool.dante.core.property.BoxingTypeProperty;
 import com.github.artyomcool.dante.core.property.IdProperty;
 import com.github.artyomcool.dante.core.property.Property;
@@ -43,7 +44,7 @@ import static javax.lang.model.element.Modifier.PROTECTED;
 import static javax.lang.model.element.Modifier.PUBLIC;
 import static javax.lang.model.util.ElementFilter.fieldsIn;
 
-public class EntityGenerator {
+public class DaoGenerator {
 
     private final RegistryGenerator registryGenerator;
     private final Element entity;
@@ -58,7 +59,7 @@ public class EntityGenerator {
     private final String entityClassName;
     private final String tableName;
 
-    public EntityGenerator(RegistryGenerator registryGenerator, Element entity) {
+    public DaoGenerator(RegistryGenerator registryGenerator, Element entity) {
         this.registryGenerator = registryGenerator;
         this.entity = entity;
 
@@ -68,7 +69,7 @@ public class EntityGenerator {
         entityTypeName = TypeName.get(entity.asType());
 
         parameterizedAbstractDaoType = ParameterizedTypeName.get(
-                ClassName.get(AbstractDao.class),
+                ClassName.get(Dao.class),
                 entityTypeName
         );
 
@@ -120,14 +121,14 @@ public class EntityGenerator {
         return registryGenerator;
     }
 
-    public GeneratedEntity generate() throws IOException {
+    public GeneratedDao generate() throws IOException {
 
         TypeSpec.Builder daoClass = TypeSpec.classBuilder(entityClassName + "_Dao_")
                 .addOriginatingElement(entity)
                 .addModifiers(Modifier.PUBLIC)
                 .superclass(parameterizedAbstractDaoType)
-                .addField(genFields())
                 .addField(genIdField())
+                .addField(genFields())
                 .addMethod(genConstructor())
                 .addMethod(genCreateEntity())
                 .addMethod(genProperties())
@@ -141,7 +142,7 @@ public class EntityGenerator {
 
         file.writeTo(registryGenerator.getProcessingEnv().getFiler());
 
-        return new GeneratedEntity(this, typeSpec);
+        return new GeneratedDao(this, typeSpec);
     }
 
     private FieldSpec genIdField() {
@@ -151,13 +152,15 @@ public class EntityGenerator {
                 Modifier.PRIVATE,
                 Modifier.FINAL
         )
-                .initializer("$L", getIdType())
+                .initializer("$L", genIdInitializer())
                 .build();
     }
 
-    private TypeSpec getIdType() {
+    private TypeSpec genIdInitializer() {
+        CodeBlock.Builder nonIdBuilder = CodeBlock.builder();
+        buildNonIdProperty(nonIdBuilder, idField);
         Id idAnnotation = idField.getAnnotation(Id.class);
-        return TypeSpec.anonymousClassBuilder("fields_.get($L), $L", fields.indexOf(idField), idAnnotation.preventAutoincrement())
+        return TypeSpec.anonymousClassBuilder("$L, $L", nonIdBuilder.build(), idAnnotation.preventAutoincrement())
                 .superclass(idPropertyType)
                 .addMethod(getIdAfterInsert())
                 .addMethod(MethodSpec.methodBuilder("isNull")
@@ -272,6 +275,14 @@ public class EntityGenerator {
     }
 
     private void buildProperty(CodeBlock.Builder builder, VariableElement field) {
+        if (field.getAnnotation(Id.class) == null) {
+            buildNonIdProperty(builder, field);
+        } else {
+            builder.add("id_");
+        }
+    }
+
+    private void buildNonIdProperty(CodeBlock.Builder builder, VariableElement field) {
         builder.add("\n");
 
         TypeName fieldTypeName = TypeName.get(field.asType());
@@ -318,7 +329,7 @@ public class EntityGenerator {
     }
 
     private TypeSpec getStringProperty(VariableElement field) {
-        return property(field, TypeName.get(field.asType()), ", false");
+        return property(field, TypeName.get(field.asType()), ", true"); //TODO nullable/not null
     }
 
     private TypeSpec primitiveProperty(VariableElement field) {
@@ -409,7 +420,7 @@ public class EntityGenerator {
         return MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(sqliteDatabase(), "db")
-                .addStatement("super(db)")
+                .addStatement("super(db, $L)", entity.getAnnotation(Entity.class).sinceVersion())
                 .build();
     }
 

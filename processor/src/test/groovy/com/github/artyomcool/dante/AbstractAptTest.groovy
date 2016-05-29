@@ -81,6 +81,7 @@ class AbstractAptTest {
                 }
             }
 
+            println getSources(inMemoryFileManager, generatedSouces)
             return newInstance("com.github.artyomcool.dante.DefaultRegistry", loader) as DaoRegistry
         } catch (Exception e) {
             def exception = "Compilation error.\n====== Sources =======\n${getSources(inMemoryFileManager, generatedSouces)}\n\n======= Diagnostic logs ======\n${diagnostics.join('\n')}\n\n"

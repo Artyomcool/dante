@@ -24,6 +24,10 @@ package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
 
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+
 public class DaoMaster implements Registry {
 
     private final DaoRegistry delegate;
@@ -38,6 +42,39 @@ public class DaoMaster implements Registry {
 
     public void init(SQLiteDatabase db) {
         delegate.init(db);
+        int schemeVersion = delegate.getVersion();
+        int dbVersion = db.getVersion();
+        if (dbVersion > schemeVersion) {
+            onDowngrade(db);
+        } else if (dbVersion < schemeVersion) {
+            if (dbVersion == 0) {
+                onCreate();
+            } else {
+                onUpgrade(db);
+            }
+            db.setVersion(schemeVersion);
+        }
+    }
+
+    private void onCreate() {
+        delegate.getDao().forEach(Dao::createTable);
+    }
+
+    private void onDowngrade(SQLiteDatabase db) {
+        throw new UnsupportedOperationException("not implemented");
+    }
+
+    private void onUpgrade(SQLiteDatabase db) {
+        Map<Integer, Dao<?>> versionToDao = new HashMap<>();
+        delegate.getDao().stream()
+                .filter(dao -> dao.getSinceVersion() > db.getVersion())
+                .forEach(dao -> versionToDao.put(dao.getSinceVersion(), dao));
+        for (int i = db.getVersion() + 1; i <= delegate.getVersion(); i++) {
+            Dao<?> dao = versionToDao.get(i);
+            if (dao != null) {
+                dao.createTable();
+            }
+        }
     }
 
     @Override
@@ -46,7 +83,7 @@ public class DaoMaster implements Registry {
     }
 
     @Override
-    public <T> AbstractDao<T> dao(Class<T> clazz) {
+    public <T> Dao<T> dao(Class<T> clazz) {
         return delegate.dao(clazz);
     }
 

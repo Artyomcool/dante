@@ -31,13 +31,11 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteStatement
 import android.net.Uri
 import android.os.Bundle
-import com.github.artyomcool.dante.core.dao.AbstractDao
+import com.github.artyomcool.dante.core.dao.Dao
 import com.github.artyomcool.dante.core.dao.DaoMaster
 import com.github.artyomcool.dante.core.dao.DaoRegistry
-import com.github.artyomcool.dante.core.property.BoxingTypeProperty
 import com.github.artyomcool.dante.core.property.DelegatingProperty
 import com.github.artyomcool.dante.core.property.IdProperty
-import com.github.artyomcool.dante.core.property.IntegerNumbersProperty
 import com.github.artyomcool.dante.core.property.Property
 import com.sun.rowset.CachedRowSetImpl
 import groovy.sql.Sql
@@ -47,10 +45,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.powermock.tests.utils.impl.AptRunner
 
-import java.lang.reflect.Field
 import java.sql.SQLException
 import java.sql.Types
 
+@SuppressWarnings(["GroovyAssignabilityCheck", "GroovyAccessibility"])
 @RunWith(AptRunner)
 class AnnotationProcessorTest extends AbstractAptTest {
 
@@ -59,6 +57,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
     @Before
     void init() {
         def sql = Sql.newInstance(url: 'jdbc:sqlite::memory:', driver: 'org.sqlite.JDBC')
+
+        def dbVersion = 0;
 
         database = [
                 rawQuery        : { String where, String[] params ->
@@ -138,7 +138,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
                         @Override
                         int getColumnIndex(String columnName) {
                             try {
-                                return resultSet.findColumn(columnName)
+                                return resultSet.findColumn(columnName) - 1
                             } catch (SQLException ignored) {
                                 return -1
                             }
@@ -147,7 +147,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
                         @Override
                         int getColumnIndexOrThrow(String columnName) throws IllegalArgumentException {
                             try {
-                                return resultSet.findColumn(columnName)
+                                return resultSet.findColumn(columnName) - 1
                             } catch (SQLException e) {
                                 throw new IllegalArgumentException(e)
                             }
@@ -155,12 +155,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                         @Override
                         String getColumnName(int columnIndex) {
-                            return resultSet.metaData.getColumnName(columnIndex)
+                            return resultSet.metaData.getColumnName(columnIndex + 1)
                         }
 
                         @Override
                         String[] getColumnNames() {
-                            (0..getColumnCount()).collect { getColumnName(it) }
+                            (1..getColumnCount()).collect { getColumnName(it) }
                         }
 
                         @Override
@@ -170,12 +170,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                         @Override
                         byte[] getBlob(int columnIndex) {
-                            return resultSet.getBlob(columnIndex).binaryStream.bytes
+                            return resultSet.getBlob(columnIndex + 1).binaryStream.bytes
                         }
 
                         @Override
                         String getString(int columnIndex) {
-                            return resultSet.getString(columnIndex)
+                            return resultSet.getString(columnIndex + 1)
                         }
 
                         @Override
@@ -185,32 +185,32 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                         @Override
                         short getShort(int columnIndex) {
-                            return resultSet.getShort(columnIndex)
+                            return resultSet.getShort(columnIndex + 1)
                         }
 
                         @Override
                         int getInt(int columnIndex) {
-                            return resultSet.getInt(columnIndex)
+                            return resultSet.getInt(columnIndex + 1)
                         }
 
                         @Override
                         long getLong(int columnIndex) {
-                            return resultSet.getLong(columnIndex)
+                            return resultSet.getLong(columnIndex + 1)
                         }
 
                         @Override
                         float getFloat(int columnIndex) {
-                            return resultSet.getFloat(columnIndex)
+                            return resultSet.getFloat(columnIndex + 1)
                         }
 
                         @Override
                         double getDouble(int columnIndex) {
-                            return resultSet.getDouble(columnIndex)
+                            return resultSet.getDouble(columnIndex + 1)
                         }
 
                         @Override
                         int getType(int columnIndex) {
-                            def type = resultSet.metaData.getColumnType(columnIndex)
+                            def type = resultSet.metaData.getColumnType(columnIndex + 1)
                             switch (type) {
                                 case Types.BIGINT:
                                 case Types.TINYINT:
@@ -233,7 +233,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                         @Override
                         boolean isNull(int columnIndex) {
-                            return resultSet.getObject(columnIndex) == null
+                            return resultSet.getObject(columnIndex + 1) == null
                         }
 
                         @Override
@@ -321,6 +321,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
                                 params[index] = value
                             }
                     ] as SQLiteStatement
+                },
+                getVersion : {
+                    dbVersion
+                },
+                setVersion: {
+                    dbVersion = it
                 }
         ] as SQLiteDatabase
     }
@@ -349,18 +355,19 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     def verifyIntegerRegistry(DaoRegistry registry) {
-        AbstractDao<?> dao = registry.dao[0]
+        Dao<?> dao = registry.dao[0]
         def entity = dao.createEntity()
 
         IdProperty<?> property = dao.getIdProperty()
         assert property.getColumnType() == 'INTEGER'
 
-        Property<?> delegate = getField(dao, 'delegate')
+        Property<?> delegate = getField(getField(property, 'delegate'), 'delegate')
 
         try {
             def result = delegate.get(entity)
             throw new IllegalStateException("Should be NPE, but result returned: " + result)
-        } catch (NullPointerException expected) {
+        } catch (NullPointerException ignored) {
+            //expected
         }
 
         assert property.isNull(entity)
@@ -369,10 +376,10 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert delegate.get(entity) == 123
     }
 
-    private Object getField(def obj, def name) {
+    private static Object getField(def obj, def name) {
         def field = DelegatingProperty.declaredFields.find { it.name == name }
         field.setAccessible(true)
-        field.get(obj.getProperties()[0])
+        field.get(obj)
     }
 
     @Test
@@ -409,17 +416,20 @@ class AnnotationProcessorTest extends AbstractAptTest {
     void justIdString() {
         def registry = justId('@Id(iWillSetIdByMySelf = true) String id')
 
-        AbstractDao<?> dao = registry.dao[0]
+        Dao<?> dao = registry.dao[0]
         def entity = dao.createEntity()
 
         IdProperty<?> idProperty = dao.getIdProperty()
         assert idProperty.getColumnType() == 'TEXT'
 
-        Property<?> property = dao.getProperties()[0]
-        assert property.getColumnType() == 'TEXT'
-        assert property.get(entity) == null
+        assert idProperty == dao.getProperties()[0]
+
+        assert idProperty.getColumnType() == 'TEXT'
+
+        Property delegate = getField(idProperty, 'delegate')
+        assert delegate.get(entity) == null
         entity.id = '123'
-        assert property.get(entity) == '123'
+        assert delegate.get(entity) == '123'
     }
 
     @Ignore("byte[] fields are not supported yet")
@@ -459,7 +469,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
          ]])
-        registry.init(database)
+        DaoMaster master = new DaoMaster(registry)
+        master.init(database)
 
         def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
         def queries = registry.queries(testQueryClass)
@@ -469,14 +480,14 @@ class AnnotationProcessorTest extends AbstractAptTest {
     @Test
     void complex() {
         DaoRegistry registry = generateRegistry([[
-            fullClassName: "test.T1",
+            fullClassName: "test.T",
             sourceFile: """
                 package test;
 
                 import com.github.artyomcool.dante.annotation.*;
 
                 @Entity
-                public class T1 {
+                public class T {
 
                     @Id
                     Long id;
@@ -502,7 +513,6 @@ class AnnotationProcessorTest extends AbstractAptTest {
         master.init(database)
 
         def dao = registry.dao[0]
-        dao.createTable()
 
         dao.insert(dao.createEntity())
 
@@ -515,12 +525,69 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert cursor.getInt(cursor.getColumnIndex("INTEGER2")) == 7
         assert !cursor.moveToNext()
 
-        cursor = dao.select("where 1 = 1")
+        cursor = dao.select('')
         assert cursor.moveToNext()
         assert cursor.getInt(cursor.getColumnIndex("INTEGER2")) == 0
         assert cursor.moveToNext()
         assert cursor.getInt(cursor.getColumnIndex("INTEGER2")) == 7
         assert !cursor.moveToNext()
+    }
+
+    @Test
+    void upgradeAddEntity() {
+        def t1 = [
+            fullClassName: "test.T1",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T1 {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def t2 = [
+            fullClassName: "test.T2",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity(sinceVersion = 2)
+                public class T2 {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def registry = generateRegistry([t1])
+        DaoMaster master = new DaoMaster(registry)
+        master.init(database)
+        assert database.version == 1
+
+
+        registry = generateRegistry([t1, t2])
+        master = new DaoMaster(registry)
+        master.init(database)
+        assert database.version == 2
+
+        def e1 = registry.dao[0].createEntity()
+        registry.dao[0].insert(e1)
+
+        def e2 = registry.dao[1].createEntity()
+        registry.dao[1].insert(e2)
+
+        assert registry.dao[0].selectUnique('') == e1
+        assert registry.dao[1].selectUnique('') == e2
     }
 
 }

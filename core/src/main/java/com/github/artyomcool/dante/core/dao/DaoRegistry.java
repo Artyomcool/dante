@@ -28,9 +28,9 @@ import java.util.*;
 
 public abstract class DaoRegistry implements Registry {
 
-    private final List<AbstractDao<?>> daoList = new ArrayList<>();
+    private final List<Dao<?>> daoList = new ArrayList<>();
     private final Map<Class<?>, Object> queriesMap = new HashMap<>();
-    private final Map<Class<?>, AbstractDao<?>> daoMap = new HashMap<>();
+    private final Map<Class<?>, Dao<?>> daoMap = new HashMap<>();
 
     private boolean initialized = false;
 
@@ -49,7 +49,7 @@ public abstract class DaoRegistry implements Registry {
         initialized = true;
     }
 
-    public List<AbstractDao<?>> getDao() {
+    public List<Dao<?>> getDao() {
         checkInit();
         return Collections.unmodifiableList(daoList);
     }
@@ -62,6 +62,13 @@ public abstract class DaoRegistry implements Registry {
 
     protected abstract List<EntityInfo<?>> initDao(SQLiteDatabase db);
 
+    public int getVersion() {
+        return daoList.stream()
+                .mapToInt(Dao::getSinceVersion)
+                .max()
+                .getAsInt();
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public <T> T queries(Class<T> clazz) {
@@ -70,7 +77,8 @@ public abstract class DaoRegistry implements Registry {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <T> AbstractDao<T> dao(Class<T> clazz) {
-        return (AbstractDao<T>) daoMap.get(clazz);
+    public <T> Dao<T> dao(Class<T> clazz) {
+        return (Dao<T>) daoMap.get(clazz);
     }
+
 }

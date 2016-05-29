@@ -44,12 +44,12 @@ public class QueriesGenerator {
     private final RegistryGenerator generator;
     private final Element queries;
     private final Element entity;
-    private Map<String, GeneratedEntity> generatedEntities;
+    private Map<String, GeneratedDao> generatedEntities;
 
-    public QueriesGenerator(RegistryGenerator generator, Element queries, Map<String, GeneratedEntity> generatedEntities) {
+    public QueriesGenerator(RegistryGenerator generator, Element queries, Map<String, GeneratedDao> generatedDao) {
         this.generator = generator;
         this.queries = queries;
-        this.generatedEntities = generatedEntities;
+        this.generatedEntities = generatedDao;
 
         try {
             queries.getAnnotation(Queries.class).value();
@@ -59,7 +59,7 @@ public class QueriesGenerator {
         }
     }
 
-    public GeneratedEntity getEntity() {
+    public GeneratedDao getDao() {
         return generatedEntities.get(getEntityClassName());
     }
 
@@ -72,8 +72,8 @@ public class QueriesGenerator {
     }
 
     public GeneratedQuery generate() throws IOException {
-        GeneratedEntity generatedEntity = getEntity();
-        TypeName dao = generatedEntity.getDao();
+        GeneratedDao generatedDao = getDao();
+        TypeName dao = generatedDao.getDao();
 
         TypeName superinterface = TypeName.get(queries.asType());
         TypeSpec.Builder spec = TypeSpec.classBuilder(queries.getSimpleName() + "_Impl_")
@@ -104,27 +104,27 @@ public class QueriesGenerator {
 
                 private String referenceName;
 
-                private GeneratedEntity getGeneratedEntity(String referenceName) {
-                    GeneratedEntity entity = generatedEntities.get(referenceName);
-                    if (entity == null) {
+                private GeneratedDao getGeneratedDao(String referenceName) {
+                    GeneratedDao dao = generatedEntities.get(referenceName);
+                    if (dao == null) {
                         String aPackage = getPackage(queries);
                         if (!aPackage.isEmpty()) {
-                            entity = generatedEntities.get(aPackage + "." + referenceName);
+                            dao = generatedEntities.get(aPackage + "." + referenceName);
                         }
                     }
-                    return entity;
+                    return dao;
                 }
 
                 @Override
                 public void enterTable_name(SQLiteParser.Table_nameContext ctx) {
                     referenceName = ctx.getText();
                     String currentTableName = this.referenceName;
-                    GeneratedEntity entity = getGeneratedEntity(currentTableName);
-                    if (entity == null) {
-                        generator.codeGenError(e, "Can't find an entity with name " + currentTableName);
+                    GeneratedDao dao = getGeneratedDao(currentTableName);
+                    if (dao == null) {
+                        generator.codeGenError(e, "Can't find an dao with name " + currentTableName);
                         return;
                     }
-                        String tableName = entity.getTableName();
+                        String tableName = dao.getTableName();
                         replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), tableName));
                 }
 
@@ -136,16 +136,16 @@ public class QueriesGenerator {
                 @Override
                 public void enterColumn_name(SQLiteParser.Column_nameContext ctx) {
                     String referenceName = this.referenceName == null ? getEntityClassName() : this.referenceName;
-                    GeneratedEntity entity = getGeneratedEntity(referenceName);
-                    if (entity == null) {
-                        generator.codeGenError(e, "Can't find the entity with name " + referenceName);
+                    GeneratedDao dao = getGeneratedDao(referenceName);
+                    if (dao == null) {
+                        generator.codeGenError(e, "Can't find the dao with name " + referenceName);
                         return;
                     }
                     try {
-                        String columnName = entity.getColumnName(ctx.getText());
+                        String columnName = dao.getColumnName(ctx.getText());
                         replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), columnName));
                     } catch (NoSuchElementException ex) {
-                        generator.codeGenError(e, "Can't find a column " + ctx.getText() + " in entity with name " + referenceName);
+                        generator.codeGenError(e, "Can't find a column " + ctx.getText() + " in dao with name " + referenceName);
                     }
                 }
 
