@@ -24,6 +24,7 @@ package com.github.artyomcool.dante.core.dao;
 
 import net.jcip.annotations.NotThreadSafe;
 
+import javax.annotation.Nullable;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
@@ -41,6 +42,7 @@ public class LongWeakValueIdentityHashMap<T> {
         table = new WeakEntity[16];
     }
 
+    @Nullable
     public T put(long key, T entity) {
         checkReferenceQueue();
 
@@ -77,6 +79,7 @@ public class LongWeakValueIdentityHashMap<T> {
         return null;
     }
 
+    @Nullable
     public T get(long key) {
         int index = index(key);
         @SuppressWarnings("unchecked")
@@ -90,6 +93,7 @@ public class LongWeakValueIdentityHashMap<T> {
         return null;
     }
 
+    @Nullable
     public T remove(long key) {
         int index = index(key);
         @SuppressWarnings("unchecked")

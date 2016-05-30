@@ -29,6 +29,7 @@ import com.github.artyomcool.dante.core.property.IdProperty;
 import com.github.artyomcool.dante.core.property.Property;
 import net.jcip.annotations.NotThreadSafe;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,12 +49,16 @@ public abstract class Dao<E> {
 
     private int idColumnIndex = -1;
 
+    @Nullable
     private Property<E>[] properties = null;
 
+    @Nullable
     private String selectQuery = null;
 
+    @Nullable
     private SQLiteStatement insertStatement = null;
 
+    @Nullable
     private SQLiteStatement updateStatement = null;
 
     protected Dao(SQLiteDatabase db, int sinceVersion) {
@@ -147,7 +152,7 @@ public abstract class Dao<E> {
     }
 
     public void insert(E element) {
-        ensureInsertQuery();
+        SQLiteStatement insertStatement = ensureInsertQuery();
 
         Property<E>[] properties = propertiesArray();
         for (int i = 0; i < properties.length; i++) {
@@ -159,7 +164,7 @@ public abstract class Dao<E> {
     }
 
     public void insert(Iterable<E> elements) {
-        ensureInsertQuery();
+        SQLiteStatement insertStatement = ensureInsertQuery();
 
         db.beginTransaction();
         try {
@@ -178,7 +183,7 @@ public abstract class Dao<E> {
     }
 
     public void update(E element) {
-        ensureUpdateQuery();
+        SQLiteStatement updateStatement = ensureUpdateQuery();
 
         Property<E>[] properties = propertiesArray();
         for (int i = 0; i < properties.length; i++) {
@@ -188,7 +193,7 @@ public abstract class Dao<E> {
     }
 
     public void update(Iterable<E> elements) {
-        ensureUpdateQuery();
+        SQLiteStatement updateStatement = ensureUpdateQuery();
 
         db.beginTransaction();
         try {
@@ -219,45 +224,45 @@ public abstract class Dao<E> {
         }
     }
 
-    private void ensureInsertQuery() {
-        if (insertStatement != null) {
-            return;
+    private SQLiteStatement ensureInsertQuery() {
+        if (insertStatement == null) {
+            tmp.append("INSERT INTO ")
+                    .append(getTableName())
+                    .append(" (");
+
+            allColumns(tmp);
+
+            tmp.append(") VALUES (");
+
+            for (int i = propertiesArray().length; i > 1; i--) {
+                tmp.append("?,");
+            }
+            tmp.append("?)");
+
+            insertStatement = db.compileStatement(recycle(tmp));
         }
-        tmp.append("INSERT INTO ")
-                .append(getTableName())
-                .append(" (");
-
-        allColumns(tmp);
-
-        tmp.append(") VALUES (");
-
-        for (int i = propertiesArray().length; i > 1; i--) {
-            tmp.append("?,");
-        }
-        tmp.append("?)");
-
-        insertStatement = db.compileStatement(recycle(tmp));
+        return insertStatement;
     }
 
-    private void ensureUpdateQuery() {
-        if (updateStatement != null) {
-            return;
-        }
+    private SQLiteStatement ensureUpdateQuery() {
+        if (updateStatement == null) {
         tmp.append("UPDATE '")
                 .append(getTableName())
                 .append("SET ");
 
-        for (Property<E> property : propertiesArray()) {
-            tmp.append(property.getColumnName()).append(" = ?").append(',');
+            for (Property<E> property : propertiesArray()) {
+                tmp.append(property.getColumnName()).append(" = ?").append(',');
+            }
+
+            tmp.setLength(tmp.length() - 1);
+
+            tmp.append(" WHERE ")
+                    .append(getIdProperty().getColumnName())
+                    .append(" = ?");
+
+            updateStatement = db.compileStatement(recycle(tmp));
         }
-
-        tmp.setLength(tmp.length() - 1);
-
-        tmp.append(" WHERE ")
-                .append(getIdProperty().getColumnName())
-                .append(" = ?");
-
-        updateStatement = db.compileStatement(recycle(tmp));
+        return updateStatement;
     }
 
     public void createTable() {

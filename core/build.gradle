@@ -28,7 +28,6 @@ buildscript {
     }
 }
 
-apply plugin: 'java'
 apply plugin: 'provided-base'
 
 sourceCompatibility = 1.7

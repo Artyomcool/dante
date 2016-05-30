@@ -25,6 +25,8 @@ package com.github.artyomcool.dante.core.property;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteStatement;
 
+import javax.annotation.Nullable;
+
 public abstract class StringProperty<E> extends AbstractProperty<E> {
 
     public static final String TYPE = "TEXT";
@@ -43,6 +45,7 @@ public abstract class StringProperty<E> extends AbstractProperty<E> {
         set(cursor.getString(index), entity);
     }
 
+    @Nullable
     public abstract String get(E entity);
 
     public abstract void set(String value, E entity);

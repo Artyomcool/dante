@@ -44,7 +44,7 @@ public class QueriesGenerator {
     private final RegistryGenerator generator;
     private final Element queries;
     private final Element entity;
-    private Map<String, GeneratedDao> generatedEntities;
+    private final Map<String, GeneratedDao> generatedEntities;
 
     public QueriesGenerator(RegistryGenerator generator, Element queries, Map<String, GeneratedDao> generatedDao) {
         this.generator = generator;

@@ -20,53 +20,7 @@
  * SOFTWARE.
  */
 
-apply plugin: 'antlr'
-apply plugin: 'idea'
-apply plugin: 'groovy'
-apply plugin: 'net.saliman.cobertura'
+@ParametersAreNonnullByDefault
+package com.github.artyomcool.dante.core.property;
 
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'net.saliman:gradle-cobertura-plugin:2.3.0'
-    }
-}
-
-sourceCompatibility = 1.8
-
-dependencies {
-    compile 'com.squareup:javapoet:1.2.0'
-    compile project(':annotation')
-    compile project(':core')
-
-    antlr "org.antlr:antlr4:4.5.1"
-
-    testCompile 'junit:junit:4.11'
-    testCompile 'com.google.testing.compile:compile-testing:0.8'
-    testCompile 'org.codehaus.groovy:groovy-all:2.4.6'
-    testCompile 'com.google.android:android:4.1.1.4'
-    testCompile 'org.xerial:sqlite-jdbc:3.8.11.2'
-    testCompile 'org.powermock:powermock-module-junit4:1.6.5'
-    testCompile 'org.powermock:powermock-api-mockito:1.6.5'
-
-}
-
-generateGrammarSource {
-    outputDirectory = file('src/main/generated')
-}
-
-idea {
-    module {
-        sourceDirs += generateGrammarSource.outputDirectory
-    }
-}
-
-compileJava {
-    source generateGrammarSource.outputDirectory
-}
-
-clean {
-    delete generateGrammarSource.outputDirectory
-}
+import javax.annotation.ParametersAreNonnullByDefault;

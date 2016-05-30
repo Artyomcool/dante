@@ -24,7 +24,6 @@ package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
 
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 

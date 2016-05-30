@@ -49,7 +49,7 @@ public class DaoGenerator {
     private final RegistryGenerator registryGenerator;
     private final Element entity;
 
-    private final ParameterizedTypeName parameterizedAbstractDaoType;
+    private final ParameterizedTypeName parametrizedAbstractDaoType;
     private final ParameterizedTypeName propertyType;
     private final ParameterizedTypeName idPropertyType;
     private final ParameterizedTypeName listOfPropertiesType;
@@ -68,7 +68,7 @@ public class DaoGenerator {
 
         entityTypeName = TypeName.get(entity.asType());
 
-        parameterizedAbstractDaoType = ParameterizedTypeName.get(
+        parametrizedAbstractDaoType = ParameterizedTypeName.get(
                 ClassName.get(Dao.class),
                 entityTypeName
         );
@@ -126,7 +126,7 @@ public class DaoGenerator {
         TypeSpec.Builder daoClass = TypeSpec.classBuilder(entityClassName + "_Dao_")
                 .addOriginatingElement(entity)
                 .addModifiers(Modifier.PUBLIC)
-                .superclass(parameterizedAbstractDaoType)
+                .superclass(parametrizedAbstractDaoType)
                 .addField(genIdField())
                 .addField(genFields())
                 .addMethod(genConstructor())
