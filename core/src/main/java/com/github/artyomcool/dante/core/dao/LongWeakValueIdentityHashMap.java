@@ -134,6 +134,7 @@ public class LongWeakValueIdentityHashMap<T> {
                 entity = next;
             }
         }
+        table = newTable;
     }
 
     private int index(long key) {
