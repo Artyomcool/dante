@@ -27,6 +27,7 @@ import android.database.sqlite.SQLiteDatabase
 import com.github.artyomcool.dante.core.dao.Dao
 import com.github.artyomcool.dante.core.dao.DaoMaster
 import com.github.artyomcool.dante.core.dao.DaoRegistry
+import com.github.artyomcool.dante.core.dao.DatabaseOpener
 import com.github.artyomcool.dante.core.property.DelegatingProperty
 import com.github.artyomcool.dante.core.property.IdProperty
 import com.github.artyomcool.dante.core.property.Property
@@ -187,8 +188,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
          ]])
-        DaoMaster master = new DaoMaster(registry)
-        master.init(database)
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
 
         def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
         def queries = registry.queries(testQueryClass)
@@ -226,9 +227,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        DaoMaster master = new DaoMaster(registry)
+        DaoMaster master = new DaoMaster({database}, registry)
 
-        master.init(database)
+        master.init()
 
         def dao = registry.dao[0]
 
@@ -288,14 +289,14 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]
 
         def registry = generateRegistry([t1])
-        DaoMaster master = new DaoMaster(registry)
-        master.init(database)
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
         assert database.version == 1
 
 
         registry = generateRegistry([t1, t2])
-        master = new DaoMaster(registry)
-        master.init(database)
+        master = new DaoMaster({database}, registry)
+        master.init()
         assert database.version == 2
 
         def e1 = registry.dao[0].createEntity()
@@ -330,9 +331,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        DaoMaster master = new DaoMaster(registry)
+        DaoMaster master = new DaoMaster({database}, registry)
 
-        master.init(database)
+        master.init()
 
         def entity = registry.dao[0].createEntity()
         try {

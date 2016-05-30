@@ -30,16 +30,19 @@ import java.util.Map;
 public class DaoMaster implements Registry {
 
     private final DaoRegistry delegate;
+    private final DatabaseOpener opener;
 
-    public DaoMaster() {
-        this(defaultRegistry());
+    public DaoMaster(DatabaseOpener opener) {
+        this(opener, defaultRegistry());
     }
 
-    public DaoMaster(DaoRegistry delegate) {
+    public DaoMaster(DatabaseOpener opener, DaoRegistry delegate) {
+        this.opener = opener;
         this.delegate = delegate;
     }
 
-    public void init(SQLiteDatabase db) {
+    public void init() {
+        SQLiteDatabase db = opener.open();
         delegate.init(db);
         int schemeVersion = delegate.getVersion();
         int dbVersion = db.getVersion();
