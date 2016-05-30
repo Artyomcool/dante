@@ -166,7 +166,10 @@ public abstract class Dao<E> {
     public void insert(Iterable<E> elements) {
         SQLiteStatement insertStatement = ensureInsertQuery();
 
-        db.beginTransaction();
+        boolean needTransaction = !db.inTransaction();
+        if (needTransaction) {
+            db.beginTransaction();
+        }
         try {
             Property<E>[] properties = propertiesArray();
             for (E e : elements) {
@@ -176,9 +179,13 @@ public abstract class Dao<E> {
                 long id = insertStatement.executeInsert();
                 getIdProperty().afterInsert(e, id);
             }
-            db.setTransactionSuccessful();
+            if (needTransaction) {
+                db.setTransactionSuccessful();
+            }
         } finally {
-            db.endTransaction();
+            if (needTransaction) {
+                db.endTransaction();
+            }
         }
     }
 
@@ -195,7 +202,10 @@ public abstract class Dao<E> {
     public void update(Iterable<E> elements) {
         SQLiteStatement updateStatement = ensureUpdateQuery();
 
-        db.beginTransaction();
+        boolean needTransaction = !db.inTransaction();
+        if (needTransaction) {
+            db.beginTransaction();
+        }
         try {
             Property<E>[] properties = propertiesArray();
             for (E e : elements) {
@@ -204,9 +214,13 @@ public abstract class Dao<E> {
                 }
                 updateStatement.execute();
             }
-            db.setTransactionSuccessful();
+            if (needTransaction) {
+                db.setTransactionSuccessful();
+            }
         } finally {
-            db.endTransaction();
+            if (needTransaction) {
+                db.endTransaction();
+            }
         }
     }
 
@@ -246,9 +260,9 @@ public abstract class Dao<E> {
 
     private SQLiteStatement ensureUpdateQuery() {
         if (updateStatement == null) {
-        tmp.append("UPDATE '")
-                .append(getTableName())
-                .append("SET ");
+            tmp.append("UPDATE '")
+                    .append(getTableName())
+                    .append("SET ");
 
             for (Property<E> property : propertiesArray()) {
                 tmp.append(property.getColumnName()).append(" = ?").append(',');
