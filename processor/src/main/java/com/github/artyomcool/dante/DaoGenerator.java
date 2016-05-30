@@ -30,6 +30,7 @@ import com.github.artyomcool.dante.core.property.IdProperty;
 import com.github.artyomcool.dante.core.property.Property;
 import com.squareup.javapoet.*;
 
+import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.VariableElement;
@@ -45,6 +46,13 @@ import static javax.lang.model.element.Modifier.PUBLIC;
 import static javax.lang.model.util.ElementFilter.fieldsIn;
 
 public class DaoGenerator {
+
+    private final static List<String> NOT_NULL_ANNOTATIONS = Arrays.asList(
+            "org.jetbrains.annotations.NotNull",
+            "javax.annotation.Nonnull",
+            "edu.umd.cs.findbugs.annotations.NonNull",
+            "android.support.annotation.NonNull"
+    );
 
     private final RegistryGenerator registryGenerator;
     private final Element entity;
@@ -329,7 +337,17 @@ public class DaoGenerator {
     }
 
     private TypeSpec getStringProperty(VariableElement field) {
-        return property(field, TypeName.get(field.asType()), ", true"); //TODO nullable/not null
+        return property(field, TypeName.get(field.asType()), ", " + isNullable(field));
+    }
+
+    private boolean isNullable(VariableElement field) {
+        for (AnnotationMirror annotation : field.getAnnotationMirrors()) {
+            String typeName = annotation.getAnnotationType().toString();
+            if (NOT_NULL_ANNOTATIONS.contains(typeName)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private TypeSpec primitiveProperty(VariableElement field) {

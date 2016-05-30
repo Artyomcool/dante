@@ -36,6 +36,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.powermock.tests.utils.impl.AptRunner
 
+import java.sql.SQLException
+
 @SuppressWarnings(["GroovyAssignabilityCheck", "GroovyAccessibility"])
 @RunWith(AptRunner)
 class AnnotationProcessorTest extends AbstractAptTest {
@@ -304,6 +306,44 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         assert registry.dao[0].selectUnique('') == e1
         assert registry.dao[1].selectUnique('') == e2
+    }
+
+    @Test
+    void notNullString() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+                import javax.annotation.Nonnull;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+                    @Nonnull
+                    String text;
+
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster(registry)
+
+        master.init(database)
+
+        def entity = registry.dao[0].createEntity()
+        try {
+            registry.dao[0].insert(entity)
+            throw new IllegalStateException('Should be aborted due to constraint violation')
+        } catch (SQLException ignored) {
+            //expected
+        }
+
+        entity.text = 'test'
+        registry.dao[0].insert(entity)
     }
 
 }
