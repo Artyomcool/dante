@@ -28,8 +28,8 @@ public abstract class IntegerNumbersProperty<E> extends AbstractProperty<E> {
 
     public static final String TYPE = "INTEGER";
 
-    public IntegerNumbersProperty(String name) {
-        super(name, TYPE, false);
+    public IntegerNumbersProperty(String name, int sinceVersion) {
+        super(name, TYPE, sinceVersion, false);
     }
 
     @Override

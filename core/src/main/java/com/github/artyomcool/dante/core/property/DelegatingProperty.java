@@ -34,6 +34,11 @@ public class DelegatingProperty<E> implements Property<E> {
     }
 
     @Override
+    public int sinceVersion() {
+        return delegate.sinceVersion();
+    }
+
+    @Override
     public void readFromCursor(Cursor cursor, int index, E entity) {
         delegate.readFromCursor(cursor, index, entity);
     }

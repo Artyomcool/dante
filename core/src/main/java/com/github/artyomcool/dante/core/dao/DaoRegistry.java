@@ -23,8 +23,13 @@
 package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
+import com.github.artyomcool.dante.core.property.Property;
 
 import java.util.*;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public abstract class DaoRegistry implements Registry {
 
@@ -63,8 +68,14 @@ public abstract class DaoRegistry implements Registry {
     protected abstract List<EntityInfo<?>> initDao(SQLiteDatabase db);
 
     public int getVersion() {
-        return daoList.stream()
-                .mapToInt(Dao::getSinceVersion)
+        IntStream propertiesSince = daoList.stream()
+                .flatMap(dao -> dao.getProperties().stream())
+                .mapToInt(Property::sinceVersion);
+
+        IntStream daoSince = daoList.stream()
+                .mapToInt(Dao::getSinceVersion);
+
+        return IntStream.concat(propertiesSince, daoSince)
                 .max()
                 .getAsInt();
     }

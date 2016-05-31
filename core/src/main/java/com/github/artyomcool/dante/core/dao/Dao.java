@@ -280,20 +280,29 @@ public abstract class Dao<E> {
     }
 
     public void createTable() {
-        db.execSQL(createTable(false));
+        db.execSQL(createTable(false, Integer.MAX_VALUE));
     }
 
-    public void ensureTable() {
-        db.execSQL(createTable(true));
+    public void ensureTable(int version) {
+        db.execSQL(createTable(true, version));
     }
 
-    private String createTable(boolean ifNotExists) {
+    public void ensureProperty(Property<?> property, int version) {
+        db.execSQL("ALTER TABLE '" + getTableName() + "' " +
+                "ADD COLUMN " + property.getColumnName() + " " + property.getColumnType() +
+                " " + property.getColumnExtraDefinition());
+    }
+
+    private String createTable(boolean ifNotExists, int version) {
         tmp.append("CREATE TABLE ");
         if (ifNotExists) {
             tmp.append("IF NOT EXISTS ");
         }
         tmp.append('\'').append(getTableName()).append('\'').append('(');
         for (Property<E> property : propertiesArray()) {
+            if (property.sinceVersion() > version) {
+                continue;
+            }
             tmp.append(property.getColumnName()).append(' ')
                     .append(property.getColumnType()).append(' ')
                     .append(property.getColumnExtraDefinition()).append(',');
@@ -332,5 +341,4 @@ public abstract class Dao<E> {
         tmp.setLength(0);
         return result;
     }
-
 }

@@ -27,6 +27,7 @@ import android.database.sqlite.SQLiteStatement;
 
 public interface Property<E> {
 
+    int sinceVersion();
     void readFromCursor(Cursor cursor, int index, E entity);
     void bind(SQLiteStatement statement, int index, E entity);
     String getColumnName();

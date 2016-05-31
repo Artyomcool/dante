@@ -27,11 +27,18 @@ public abstract class AbstractProperty<E> implements Property<E> {
     private final String name;
     private final String type;
     private final boolean nullable;
+    private final int sinceVersion;
 
-    public AbstractProperty(String name, String type, boolean nullable) {
+    public AbstractProperty(String name, String type, int sinceVersion, boolean nullable) {
         this.name = name;
         this.type = type;
         this.nullable = nullable;
+        this.sinceVersion = sinceVersion;
+    }
+
+    @Override
+    public int sinceVersion() {
+        return sinceVersion;
     }
 
     @Override

@@ -26,8 +26,8 @@ import android.database.Cursor;
 
 public abstract class ShortProperty<E> extends IntegerNumbersProperty<E> {
 
-    public ShortProperty(String name) {
-        super(name);
+    public ShortProperty(String name, int sinceVersion) {
+        super(name, sinceVersion);
     }
 
     @Override

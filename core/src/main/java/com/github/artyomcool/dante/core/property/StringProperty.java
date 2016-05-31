@@ -31,8 +31,8 @@ public abstract class StringProperty<E> extends AbstractProperty<E> {
 
     public static final String TYPE = "TEXT";
 
-    public StringProperty(String name, boolean nullable) {
-        super(name, TYPE, nullable);
+    public StringProperty(String name, int sinceVersion, boolean nullable) {
+        super(name, TYPE, sinceVersion, nullable);
     }
 
     @Override

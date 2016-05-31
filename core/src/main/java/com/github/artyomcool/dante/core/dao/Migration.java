@@ -20,27 +20,10 @@
  * SOFTWARE.
  */
 
-package com.github.artyomcool.dante.core.property;
+package com.github.artyomcool.dante.core.dao;
 
-import android.database.Cursor;
+public interface Migration {
 
-public abstract class BooleanProperty<E> extends IntegerNumbersProperty<E> {
+    void migrate();
 
-    public BooleanProperty(String name, int sinceVersion) {
-        super(name, sinceVersion);
-    }
-
-    @Override
-    protected long getForBind(E entity) {
-        return get(entity) ? 1 : 0;
-    }
-
-    @Override
-    public void readFromCursor(Cursor cursor, int index, E entity) {
-        set(cursor.getInt(index) != 0, entity);
-    }
-
-    public abstract boolean get(E entity);
-
-    public abstract void set(boolean value, E entity);
 }

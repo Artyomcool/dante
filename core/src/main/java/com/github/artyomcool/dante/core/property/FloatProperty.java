@@ -26,8 +26,8 @@ import android.database.Cursor;
 
 public abstract class FloatProperty<E> extends FloatingNumbersProperty<E> {
 
-    public FloatProperty(String name) {
-        super(name);
+    public FloatProperty(String name, int sinceVersion) {
+        super(name, sinceVersion);
     }
 
     @Override

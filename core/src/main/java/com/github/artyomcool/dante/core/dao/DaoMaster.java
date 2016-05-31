@@ -24,8 +24,8 @@ package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DaoMaster implements Registry {
 
@@ -67,16 +67,32 @@ public class DaoMaster implements Registry {
     }
 
     private void onUpgrade(SQLiteDatabase db) {
-        Map<Integer, Dao<?>> versionToDao = new HashMap<>();
-        delegate.getDao().stream()
-                .filter(dao -> dao.getSinceVersion() > db.getVersion())
-                .forEach(dao -> versionToDao.put(dao.getSinceVersion(), dao));
-        for (int i = db.getVersion() + 1; i <= delegate.getVersion(); i++) {
-            Dao<?> dao = versionToDao.get(i);
-            if (dao != null) {
-                dao.createTable();
+        db.beginTransaction();
+        try {
+            for (int i = db.getVersion() + 1; i <= delegate.getVersion(); i++) {
+                for (Migration migration : getMigrations(i)) {
+                    migration.migrate();
+                }
+            }
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    private List<Migration> getMigrations(int version) {
+        List<Migration> result = new ArrayList<>();
+        for (Dao<?> dao : delegate.getDao()) {
+            if (dao.getSinceVersion() == version) {
+                result.add(() -> dao.ensureTable(version));
+            } else {
+                dao.getProperties().stream()
+                        .filter(property -> property.sinceVersion() == version)
+                        .map(property -> (Migration) () -> dao.ensureProperty(property, version))
+                        .forEachOrdered(result::add);
             }
         }
+        return result;
     }
 
     @Override

@@ -28,8 +28,8 @@ public abstract class FloatingNumbersProperty<E> extends AbstractProperty<E> {
 
     public static final String TYPE = "REAL";
 
-    public FloatingNumbersProperty(String name) {
-        super(name, TYPE, false);
+    public FloatingNumbersProperty(String name, int sinceVersion) {
+        super(name, TYPE, sinceVersion, false);
     }
 
     @Override

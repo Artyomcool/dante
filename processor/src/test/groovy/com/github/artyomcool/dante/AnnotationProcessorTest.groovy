@@ -27,7 +27,6 @@ import android.database.sqlite.SQLiteDatabase
 import com.github.artyomcool.dante.core.dao.Dao
 import com.github.artyomcool.dante.core.dao.DaoMaster
 import com.github.artyomcool.dante.core.dao.DaoRegistry
-import com.github.artyomcool.dante.core.dao.DatabaseOpener
 import com.github.artyomcool.dante.core.property.DelegatingProperty
 import com.github.artyomcool.dante.core.property.IdProperty
 import com.github.artyomcool.dante.core.property.Property
@@ -307,6 +306,123 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         assert registry.dao[0].selectUnique('') == e1
         assert registry.dao[1].selectUnique('') == e2
+    }
+
+    @Test
+    void upgradeAddProperty() {
+        def t1 = [
+                fullClassName: "test.T",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def t2 = [
+                fullClassName: "test.T",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    @SinceVersion(2)
+                    Long newField;
+
+                }
+            """
+        ]
+
+        def registry = generateRegistry([t1])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+        assert database.version == 1
+
+        def e1 = registry.dao[0].createEntity()
+        registry.dao[0].insert(e1)
+        assert e1.id
+
+        registry = generateRegistry([t2])
+        master = new DaoMaster({database}, registry)
+        master.init()
+        assert database.version == 2
+
+        def e2 = registry.dao[0].selectUnique('')
+        assert e2.id == e1.id
+        assert !e2.newField
+    }
+
+    @Ignore
+    @Test
+    void upgradeAddNotNullProperty() {
+        def t1 = [
+                fullClassName: "test.T",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def t2 = [
+                fullClassName: "test.T",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    @SinceVersion(value = 2)
+                    long newField;
+
+                }
+            """
+        ]
+
+        def registry = generateRegistry([t1])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+        assert database.version == 1
+
+        def e1 = registry.dao[0].createEntity()
+        registry.dao[0].insert(e1)
+        assert e1.id
+
+        registry = generateRegistry([t2])
+        master = new DaoMaster({database}, registry)
+        master.init()
+        assert database.version == 2
+
+        def e2 = registry.dao[0].selectUnique('')
+        assert e2.id == e1.id
+        assert e2.newField == 7
     }
 
     @Test

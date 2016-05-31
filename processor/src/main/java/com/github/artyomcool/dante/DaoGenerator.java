@@ -24,6 +24,7 @@ package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
+import com.github.artyomcool.dante.annotation.SinceVersion;
 import com.github.artyomcool.dante.core.dao.Dao;
 import com.github.artyomcool.dante.core.property.BoxingTypeProperty;
 import com.github.artyomcool.dante.core.property.IdProperty;
@@ -369,7 +370,9 @@ public class DaoGenerator {
                 TypeName.get(entity.asType())
         );
         String columnName = registryGenerator.toTableName(field.getSimpleName().toString());
-        return TypeSpec.anonymousClassBuilder("$S" + extraParams, columnName)
+        SinceVersion annotation = field.getAnnotation(SinceVersion.class);
+        int sinceVersion = annotation == null ? 1 : annotation.value();
+        return TypeSpec.anonymousClassBuilder("$S, $L" + extraParams, columnName, sinceVersion)
                 .superclass(superclass)
                 .addMethod(
                         propertySet(field, typeName)

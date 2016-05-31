@@ -28,8 +28,8 @@ public abstract class BlobProperty<E> extends AbstractProperty<E> {
 
     public static final String TYPE = "BLOB";
 
-    public BlobProperty(String name, boolean nullable) {
-        super(name, TYPE, nullable);
+    public BlobProperty(String name, int sinceVersion, boolean nullable) {
+        super(name, TYPE, sinceVersion, nullable);
     }
 
     @Override

@@ -314,7 +314,10 @@ class SqlHelper {
                 },
                 setVersion: {
                     dbVersion = it
-                }
+                },
+                beginTransaction: {},
+                setTransactionSuccessful: {},
+                endTransaction: {}
         ] as SQLiteDatabase
     }
 
