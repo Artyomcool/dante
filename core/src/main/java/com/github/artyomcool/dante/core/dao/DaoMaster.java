@@ -23,6 +23,7 @@
 package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
+import com.github.artyomcool.dante.core.property.Property;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -59,7 +60,9 @@ public class DaoMaster implements Registry {
     }
 
     private void onCreate() {
-        delegate.getDao().forEach(Dao::createTable);
+        for (Dao<?> dao : delegate.getDao()) {
+            dao.createTable();
+        }
     }
 
     private void onDowngrade(SQLiteDatabase db) {
@@ -80,16 +83,27 @@ public class DaoMaster implements Registry {
         }
     }
 
-    private List<Migration> getMigrations(int version) {
+    private List<Migration> getMigrations(final int version) {
         List<Migration> result = new ArrayList<>();
-        for (Dao<?> dao : delegate.getDao()) {
+        for (final Dao<?> dao : delegate.getDao()) {
             if (dao.getSinceVersion() == version) {
-                result.add(() -> dao.ensureTable(version));
+                result.add(new Migration() {
+                    @Override
+                    public void migrate() {
+                        dao.ensureTable(version);
+                    }
+                });
             } else {
-                dao.getProperties().stream()
-                        .filter(property -> property.sinceVersion() == version)
-                        .map(property -> (Migration) () -> dao.ensureProperty(property, version))
-                        .forEachOrdered(result::add);
+                for (final Property<?> property : dao.getProperties()) {
+                    if (property.sinceVersion() == version) {
+                        result.add(new Migration() {
+                            @Override
+                            public void migrate() {
+                                dao.ensureProperty(property, version);
+                            }
+                        });
+                    }
+                }
             }
         }
         return result;
