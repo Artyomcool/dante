@@ -51,6 +51,11 @@ public abstract class IdProperty<E> extends DelegatingProperty<E> {
         return result;
     }
 
+    @Override
+    public String getDefaultValue() {
+        return null;
+    }
+
     protected abstract boolean isNull(E entity);
 
     public abstract void afterInsert(E entity, long rowId);

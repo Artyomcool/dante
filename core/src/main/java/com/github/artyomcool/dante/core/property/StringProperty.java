@@ -45,6 +45,11 @@ public abstract class StringProperty<E> extends AbstractProperty<E> {
         set(cursor.getString(index), entity);
     }
 
+    @Override
+    public String getDefaultValue() {
+        return isNullable() ? null : "''";
+    }
+
     @Nullable
     public abstract String get(E entity);
 

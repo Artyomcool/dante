@@ -54,6 +54,11 @@ public abstract class BoxingTypeProperty<E> extends DelegatingProperty<E> {
         return "";
     }
 
+    @Override
+    public String getDefaultValue() {
+        return null;
+    }
+
     protected void setDefault(E entity) {
 
     }

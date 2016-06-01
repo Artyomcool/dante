@@ -37,6 +37,11 @@ public abstract class IntegerNumbersProperty<E> extends AbstractProperty<E> {
         statement.bindLong(index, getForBind(entity));
     }
 
+    @Override
+    public String getDefaultValue() {
+        return "0";
+    }
+
     protected abstract long getForBind(E entity);
 
 }

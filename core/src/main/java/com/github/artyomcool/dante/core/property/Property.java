@@ -33,4 +33,5 @@ public interface Property<E> {
     String getColumnName();
     String getColumnType();
     String getColumnExtraDefinition();
+    String getDefaultValue();
 }

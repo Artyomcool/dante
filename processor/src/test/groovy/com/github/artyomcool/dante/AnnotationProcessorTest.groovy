@@ -366,7 +366,6 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert !e2.newField
     }
 
-    @Ignore
     @Test
     void upgradeAddNotNullProperty() {
         def t1 = [
@@ -402,6 +401,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
                     @SinceVersion(value = 2)
                     long newField;
 
+                    @SinceVersion(value = 2)
+                    float newField2;
+
+                    @SinceVersion(value = 2)
+                    String newField3;
+
                 }
             """
         ]
@@ -422,7 +427,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         def e2 = registry.dao[0].selectUnique('')
         assert e2.id == e1.id
-        assert e2.newField == 7
+        assert e2.newField == 0
+        assert e2.newField2 == 0
+        assert e2.newField3 == null
     }
 
     @Test

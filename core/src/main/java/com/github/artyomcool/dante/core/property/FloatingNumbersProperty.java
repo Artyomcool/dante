@@ -37,6 +37,11 @@ public abstract class FloatingNumbersProperty<E> extends AbstractProperty<E> {
         statement.bindDouble(index, getForBind(entity));
     }
 
+    @Override
+    public String getDefaultValue() {
+        return "0";
+    }
+
     protected abstract double getForBind(E entity);
 
 }

@@ -36,6 +36,10 @@ public abstract class AbstractProperty<E> implements Property<E> {
         this.sinceVersion = sinceVersion;
     }
 
+    protected final boolean isNullable() {
+        return nullable;
+    }
+
     @Override
     public int sinceVersion() {
         return sinceVersion;

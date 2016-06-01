@@ -288,9 +288,10 @@ public abstract class Dao<E> {
     }
 
     public void ensureProperty(Property<?> property, int version) {
+        String defaultValue = property.getDefaultValue() == null ? "" : " DEFAULT " + property.getDefaultValue();
         db.execSQL("ALTER TABLE '" + getTableName() + "' " +
                 "ADD COLUMN " + property.getColumnName() + " " + property.getColumnType() +
-                " " + property.getColumnExtraDefinition());
+                " " + property.getColumnExtraDefinition() + defaultValue);
     }
 
     private String createTable(boolean ifNotExists, int version) {

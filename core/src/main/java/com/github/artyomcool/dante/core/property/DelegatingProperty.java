@@ -62,4 +62,9 @@ public class DelegatingProperty<E> implements Property<E> {
     public String getColumnName() {
         return delegate.getColumnName();
     }
+
+    @Override
+    public String getDefaultValue() {
+        return delegate.getDefaultValue();
+    }
 }
