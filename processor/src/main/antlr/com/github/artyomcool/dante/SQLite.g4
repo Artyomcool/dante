@@ -35,7 +35,11 @@ grammar SQLite;
 }
 
 parse
- : expr EOF
+ : expr
+   ( K_GROUP K_BY expr ( ',' expr )* ( K_HAVING expr )? )?
+   ( K_ORDER K_BY ordering_term ( ',' ordering_term )* )?
+   ( K_LIMIT expr ( ( K_OFFSET | ',' ) expr )? )?
+   EOF
  ;
 
 select_stmt
@@ -518,8 +522,12 @@ NUMERIC_LITERAL
  | '.' DIGIT+ ( E [-+]? DIGIT+ )?
  ;
 
+bind_name
+ : IDENTIFIER | keyword
+ ;
+
 bind_parameter
- : (':' | '@' | '$') IDENTIFIER
+ : (':' | '@' | '$') bind_name
  ;
 
 STRING_LITERAL

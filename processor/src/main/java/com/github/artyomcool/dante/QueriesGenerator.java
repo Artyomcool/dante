@@ -24,7 +24,10 @@ package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Queries;
 import com.github.artyomcool.dante.annotation.Query;
-import com.squareup.javapoet.*;
+import com.squareup.javapoet.JavaFile;
+import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.TypeName;
+import com.squareup.javapoet.TypeSpec;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.TokenStream;
@@ -124,8 +127,8 @@ public class QueriesGenerator {
                         generator.codeGenError(e, "Can't find an dao with name " + currentTableName);
                         return;
                     }
-                        String tableName = dao.getTableName();
-                        replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), tableName));
+                    String tableName = dao.getTableName();
+                    replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), tableName));
                 }
 
                 @Override
@@ -152,7 +155,7 @@ public class QueriesGenerator {
                 @Override
                 public void enterBind_parameter(SQLiteParser.Bind_parameterContext ctx) {
                     replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), "?"));
-                    paramReplacements.add(new ParamReplacement(ctx.getStart().getStartIndex(), ctx.IDENTIFIER().getText()));
+                    paramReplacements.add(new ParamReplacement(ctx.getStart().getStartIndex(), ctx.bind_name().getText()));
                 }
             }, parser.parse());
 

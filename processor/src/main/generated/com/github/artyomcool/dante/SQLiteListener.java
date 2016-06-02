@@ -1,25 +1,3 @@
-/*
- * Copyright (c)  2015-2016, Artyom Drozdov
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
-
 // Generated from com/github/artyomcool/dante/SQLite.g4 by ANTLR 4.5.1
 
    package com.github.artyomcool.dante;
@@ -331,6 +309,16 @@ public interface SQLiteListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	void exitAny_name(SQLiteParser.Any_nameContext ctx);
+	/**
+	 * Enter a parse tree produced by {@link SQLiteParser#bind_name}.
+	 * @param ctx the parse tree
+	 */
+	void enterBind_name(SQLiteParser.Bind_nameContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link SQLiteParser#bind_name}.
+	 * @param ctx the parse tree
+	 */
+	void exitBind_name(SQLiteParser.Bind_nameContext ctx);
 	/**
 	 * Enter a parse tree produced by {@link SQLiteParser#bind_parameter}.
 	 * @param ctx the parse tree

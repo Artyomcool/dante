@@ -182,6 +182,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
                         @Query(where = "id > \$fromId AND text = \$text")
                         List<T> byTexts(String text, long fromId);
 
+                        @Query(where = "text = \$text LIMIT \$limit")
+                        List<T> byTextWithLimit(String text, int limit);
+
                     }
 
                 }

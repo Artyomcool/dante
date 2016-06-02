@@ -41,10 +41,12 @@ dependencies {
     compile project(':annotation')
     compile project(':core')
 
-    antlr "org.antlr:antlr4:4.5.1"
+    compile 'org.antlr:antlr4-runtime:4.5.1'
+    antlr 'org.antlr:antlr4:4.5.1'
 
     testCompile 'junit:junit:4.11'
     testCompile 'com.google.testing.compile:compile-testing:0.8'
+    testCompile 'com.google.guava:guava:19.0'
     testCompile 'org.codehaus.groovy:groovy-all:2.4.6'
     testCompile 'com.google.android:android:4.1.1.4'
     testCompile 'org.xerial:sqlite-jdbc:3.8.11.2'
