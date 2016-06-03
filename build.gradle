@@ -22,9 +22,10 @@
 
 allprojects {
     apply plugin: 'java'
+    apply plugin: 'maven'
 
-    group 'com.github.artyomcool'
-    version '1.0-SNAPSHOT'
+    group 'com.github.artyomcool.dante'
+    version '0.1.0-SNAPSHOT'
 
     repositories {
         mavenCentral()
