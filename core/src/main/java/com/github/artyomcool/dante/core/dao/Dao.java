@@ -332,7 +332,10 @@ public abstract class Dao<E> {
             tmp.append(selectQuery);
         }
 
-        tmp.append(where);
+        if (!where.isEmpty()) {
+            tmp.append("WHERE ");
+            tmp.append(where);
+        }
 
         return recycle(tmp);
     }

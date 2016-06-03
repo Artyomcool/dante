@@ -199,6 +199,56 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void queryWithLimit() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+                    String text;
+
+                    @Queries(T.class)
+                    public interface TestQuery {
+
+                        @Query(where = "text LIKE \$text LIMIT \$limit")
+                        List<T> byTextWithLimit(String text, int limit);
+
+                    }
+
+                }
+            """
+        ]])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+
+        def dao = registry.dao[0];
+
+        def inserted = []
+
+        (1..10).each {
+            def e = dao.createEntity()
+            e.id = it
+            e.text = "text $it"
+            dao.insert(e)
+            inserted << e
+        }
+
+        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def queries = registry.queries(testQueryClass)
+        List result = queries.byTextWithLimit('text %', 7);
+
+        assert result == inserted[0..6]
+    }
+
+    @Test
     void complex() {
         DaoRegistry registry = generateRegistry([[
             fullClassName: "test.T",
@@ -241,7 +291,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         t1.integer2 = 7
         dao.insert(t1)
 
-        Cursor cursor = dao.select("where integer2 = 7")
+        Cursor cursor = dao.select("integer2 = 7")
         assert cursor.moveToNext()
         assert cursor.getInt(cursor.getColumnIndex("INTEGER2")) == 7
         assert !cursor.moveToNext()
