@@ -37,6 +37,7 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.type.MirroredTypeException;
 import java.io.IOException;
+import java.lang.instrument.IllegalClassFormatException;
 import java.util.*;
 
 import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
@@ -78,12 +79,28 @@ public class QueriesGenerator {
         GeneratedDao generatedDao = getDao();
         TypeName dao = generatedDao.getDao();
 
-        TypeName superinterface = TypeName.get(queries.asType());
+        boolean isInterface;
+        switch (queries.getKind()) {
+            case INTERFACE:
+                isInterface = true;
+                break;
+            case CLASS:
+                isInterface = false;
+                break;
+            default:
+                throw new IllegalArgumentException("Class or interface expected, found " + queries);
+        }
+        TypeName queriesTypeName = TypeName.get(queries.asType());
         TypeSpec.Builder spec = TypeSpec.classBuilder(queries.getSimpleName() + "_Impl_")
                 .addOriginatingElement(queries)
                 .addModifiers(Modifier.PUBLIC)
-                .addSuperinterface(superinterface)
                 .addField(dao, "dao", Modifier.PRIVATE, Modifier.FINAL);
+
+        if (isInterface) {
+            spec.addSuperinterface(queriesTypeName);
+        } else {
+            spec.superclass(queriesTypeName);
+        }
 
         spec.addMethod(MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
