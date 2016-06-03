@@ -249,6 +249,56 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void queryWithExpression() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+                    int value;
+
+                    @Queries(T.class)
+                    public interface TestQuery {
+
+                        @Query(where = "value > \$[a + b]")
+                        List<T> greaterThenSum(int a, int b);
+
+                    }
+
+                }
+            """
+        ]])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+
+        def dao = registry.dao[0];
+
+        def inserted = []
+
+        (1..10).each {
+            def e = dao.createEntity()
+            e.id = it
+            e.value = it * 10
+            dao.insert(e)
+            inserted << e
+        }
+
+        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def queries = registry.queries(testQueryClass)
+        List result = queries.greaterThenSum(10, 20);
+
+        assert result.size() == 7
+    }
+
+    @Test
     void complex() {
         DaoRegistry registry = generateRegistry([[
             fullClassName: "test.T",

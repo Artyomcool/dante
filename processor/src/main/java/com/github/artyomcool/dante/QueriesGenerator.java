@@ -155,7 +155,11 @@ public class QueriesGenerator {
                 @Override
                 public void enterBind_parameter(SQLiteParser.Bind_parameterContext ctx) {
                     replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), "?"));
-                    paramReplacements.add(new ParamReplacement(ctx.getStart().getStartIndex(), ctx.bind_name().getText()));
+                    String text = ctx.bind_name().getText();
+                    if (text.startsWith("[") && text.endsWith("]")) {
+                        text = text.substring(1, text.length() - 1);
+                    }
+                    paramReplacements.add(new ParamReplacement(ctx.getStart().getStartIndex(), text));
                 }
             }, parser.parse());
 
