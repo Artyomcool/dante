@@ -22,6 +22,8 @@
 
 package com.github.artyomcool.dante.annotation;
 
+import com.github.artyomcool.dante.core.dao.Dao;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Target;
 
@@ -29,5 +31,7 @@ import java.lang.annotation.Target;
 public @interface Entity {
 
     int sinceVersion() default 1;
+
+    Class<? extends Dao> dao() default Dao.class;
 
 }

@@ -229,7 +229,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def dao = registry.dao[0];
+        def dao = registry.dao[0]
 
         def inserted = []
 
@@ -243,7 +243,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
         def queries = registry.queries(testQueryClass)
-        List result = queries.byTextWithLimit('text %', 7);
+        List result = queries.byTextWithLimit('text %', 7)
 
         assert result == inserted[0..6]
     }
@@ -279,7 +279,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def dao = registry.dao[0];
+        def dao = registry.dao[0]
 
         def inserted = []
 
@@ -293,7 +293,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
         def queries = registry.queries(testQueryClass)
-        List result = queries.greaterThenSum(10, 20);
+        List result = queries.greaterThenSum(10, 20)
 
         assert result.size() == 7
     }
@@ -327,11 +327,11 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                 }
             """
-        ]])
+         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def dao = registry.dao[0];
+        def dao = registry.dao[0]
 
         def inserted = []
 
@@ -346,10 +346,108 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
         def queries = registry.queries(testQueryClass)
         (0..5).each {
-            List result = queries.greaterThenAPlusField(5);
+            List result = queries.greaterThenAPlusField(5)
             assert result.size() == (5 - it)
         }
 
+    }
+
+    @Test
+    void entityWithCustomSpecificDao() {
+        DaoRegistry registry = generateRegistry([
+        [
+                fullClassName: "test.SomeDao",
+                sourceFile: """
+                package test;
+
+                import android.database.sqlite.SQLiteDatabase;
+                import com.github.artyomcool.dante.core.dao.*;
+
+                abstract class SomeDao extends Dao<T> {
+
+                    protected SomeDao(SQLiteDatabase db, int sinceVersion) {
+                        super(db, sinceVersion);
+                    }
+
+                    @Override
+                    public int getSinceVersion() {
+                        return 100;
+                    }
+
+                }
+            """
+        ],
+        [
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity(dao = SomeDao.class)
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+
+        def dao = registry.dao[0]
+        assert dao.getSinceVersion() == 100
+    }
+
+    @Test
+    void entityWithCustomGenericDao() {
+        DaoRegistry registry = generateRegistry([
+        [
+            fullClassName: "test.SomeDao",
+            sourceFile: """
+                package test;
+
+                import android.database.sqlite.SQLiteDatabase;
+                import com.github.artyomcool.dante.core.dao.*;
+
+                abstract class SomeDao<T> extends Dao<T> {
+
+                    protected SomeDao(SQLiteDatabase db, int sinceVersion) {
+                        super(db, sinceVersion);
+                    }
+
+                    @Override
+                    public int getSinceVersion() {
+                        return 100;
+                    }
+
+                }
+            """
+        ],
+        [
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity(dao = SomeDao.class)
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+
+        def dao = registry.dao[0]
+        assert dao.getSinceVersion() == 100
     }
 
     @Test

@@ -25,16 +25,14 @@ package com.github.artyomcool.dante;
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
 import com.github.artyomcool.dante.annotation.SinceVersion;
-import com.github.artyomcool.dante.core.dao.Dao;
 import com.github.artyomcool.dante.core.property.BoxingTypeProperty;
 import com.github.artyomcool.dante.core.property.IdProperty;
 import com.github.artyomcool.dante.core.property.Property;
 import com.squareup.javapoet.*;
 
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.VariableElement;
+import javax.lang.model.element.*;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.MirroredTypeException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -57,8 +55,9 @@ public class DaoGenerator {
 
     private final RegistryGenerator registryGenerator;
     private final Element entity;
+    private final Entity annotation;
 
-    private final ParameterizedTypeName parametrizedAbstractDaoType;
+    private final TypeName abstractDaoType;
     private final ParameterizedTypeName propertyType;
     private final ParameterizedTypeName idPropertyType;
     private final ParameterizedTypeName listOfPropertiesType;
@@ -72,15 +71,33 @@ public class DaoGenerator {
         this.registryGenerator = registryGenerator;
         this.entity = entity;
 
+        annotation = entity.getAnnotation(Entity.class);
+
         entityClassName = entity.getSimpleName().toString();
         tableName = registryGenerator.toTableName(entityClassName);
 
         entityTypeName = TypeName.get(entity.asType());
 
-        parametrizedAbstractDaoType = ParameterizedTypeName.get(
-                ClassName.get(Dao.class),
-                entityTypeName
-        );
+        DeclaredType daoClass;
+        try {
+            annotation.dao();
+            throw new IllegalStateException("Excpetion should be thrown");
+        } catch (MirroredTypeException e) {
+            daoClass = (DeclaredType) e.getTypeMirror();
+        }
+
+        int typesCount = daoClass.getTypeArguments().size();
+        if (typesCount == 0) {
+            abstractDaoType = TypeName.get(daoClass);
+        } else if (typesCount == 1) {
+            ClassName typeName = ClassName.get((TypeElement) daoClass.asElement());
+            abstractDaoType = ParameterizedTypeName.get(
+                    typeName,
+                    entityTypeName
+            );
+        } else {
+            throw new IllegalArgumentException("Dao class should have no more then one type parameter: " + daoClass);
+        }
 
         propertyType = ParameterizedTypeName.get(
                 ClassName.get(Property.class),
@@ -135,7 +152,7 @@ public class DaoGenerator {
         TypeSpec.Builder daoClass = TypeSpec.classBuilder(entityClassName + "_Dao_")
                 .addOriginatingElement(entity)
                 .addModifiers(Modifier.PUBLIC)
-                .superclass(parametrizedAbstractDaoType)
+                .superclass(abstractDaoType)
                 .addField(genIdField())
                 .addField(genFields())
                 .addMethod(genConstructor())
@@ -244,6 +261,7 @@ public class DaoGenerator {
             return statement("entity.$L = ($T) value", idField.getSimpleName(), typeName);
         }
     }
+
     private CodeBlock getIdIsNull(Element idField, Id idAnnotation) {
         TypeName fieldType = TypeName.get(idField.asType());
         if (fieldType.isPrimitive()) {
