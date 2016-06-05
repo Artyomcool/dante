@@ -43,26 +43,6 @@ import java.util.Map;
 
 public class RegistryGenerator {
 
-    private static class GeneratorError {
-
-        private final Element element;
-        private final String error;
-
-        public GeneratorError(Element element, String error) {
-
-            this.element = element;
-            this.error = error;
-        }
-
-        public Element getElement() {
-            return element;
-        }
-
-        public String getError() {
-            return error;
-        }
-    }
-
     private final RoundEnvironment roundEnvironment;
     private final ProcessingEnvironment processingEnv;
     private final List<GeneratorError> errors = new ArrayList<>();
@@ -131,9 +111,17 @@ public class RegistryGenerator {
             builder
                     .addStatement("return result");
 
-            TypeSpec spec = TypeSpec.classBuilder("DefaultRegistry")
+            TypeSpec.Builder registryBuilder = TypeSpec.classBuilder("DefaultRegistry")
                     .superclass(DaoRegistry.class)
-                    .addModifiers(Modifier.PUBLIC)
+                    .addModifiers(Modifier.PUBLIC);
+            for (GeneratorError error : errors) {
+                registryBuilder.addStaticBlock(
+                        CodeBlock.builder()
+                                .addStatement("GEN_ERROR($S, $S)", error.getError(), getElementName(error.getElement()))
+                                .build()
+                );
+            }
+            TypeSpec spec = registryBuilder
                     .addMethod(builder.build())
                     .build();
 
@@ -146,6 +134,16 @@ public class RegistryGenerator {
         } catch (UncheckedIOException e) {
             throw e.getCause();
         }
+    }
+
+    private String getElementName(Element element) {
+        StringBuilder result = new StringBuilder();
+        result.append(element.getSimpleName());
+        while (element.getEnclosingElement() != null) {
+            element = element.getEnclosingElement();
+            result.insert(0, element.getSimpleName() + ".");
+        }
+        return result.toString();
     }
 
     public String toTableName(String elementName) {

@@ -156,6 +156,22 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def registry = justId('@Id(iWillSetIdByMySelf = true) byte[] id')
     }
 
+    @Test(expected = RuntimeException)
+    void failNoId() {
+        generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+                }
+            """
+        ]])
+    }
+
     @Test
     void simpleQuery() {
         DaoRegistry registry = generateRegistry([[
