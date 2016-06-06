@@ -78,19 +78,19 @@ public class DaoGenerator {
 
         entityTypeName = TypeName.get(entity.asType());
 
-        DeclaredType daoClass;
+        TypeElement daoClass;
         try {
             annotation.dao();
             throw new IllegalStateException("Excpetion should be thrown");
         } catch (MirroredTypeException e) {
-            daoClass = (DeclaredType) e.getTypeMirror();
+            daoClass = (TypeElement) ((DeclaredType) e.getTypeMirror()).asElement();
         }
 
-        int typesCount = daoClass.getTypeArguments().size();
+        int typesCount = daoClass.getTypeParameters().size();
         if (typesCount == 0) {
-            abstractDaoType = TypeName.get(daoClass);
+            abstractDaoType = ClassName.get(daoClass);
         } else if (typesCount == 1) {
-            ClassName typeName = ClassName.get((TypeElement) daoClass.asElement());
+            ClassName typeName = ClassName.get(daoClass);
             abstractDaoType = ParameterizedTypeName.get(
                     typeName,
                     entityTypeName

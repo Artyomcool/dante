@@ -36,8 +36,10 @@ import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
 import java.io.IOException;
-import java.lang.instrument.IllegalClassFormatException;
 import java.util.*;
 
 import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
@@ -200,9 +202,22 @@ public class QueriesGenerator {
                 statementBuilder.addStatement("params[$L] = String.valueOf($L)", i++, replacement.paramName);
             }
 
+            String statement;
+
+            Types types = generator.getProcessingEnv().getTypeUtils();
+            Elements elements = generator.getProcessingEnv().getElementUtils();
+            TypeMirror iterableMirror = elements.getTypeElement(Iterable.class.getName()).asType();
+            if (types.isAssignable(types.erasure(e.getReturnType()), iterableMirror)) {
+                statement = "return dao.selectList(where, params)";
+            } else if (types.isAssignable(entity.asType(), e.getReturnType())) {
+                statement = "return dao.selectUnique(where, params)";
+            } else {
+                generator.codeGenError(e, "Unsupported return type: " + e.getReturnType());
+                statement = "ERROR();";
+            }
             MethodSpec methodSpec = statementBuilder
                     .addCode("\n")
-                    .addStatement("return dao.selectList(where, params)")
+                    .addStatement(statement)
                     .build();
 
             spec.addMethod(methodSpec);

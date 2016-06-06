@@ -136,6 +136,7 @@ public abstract class Dao<E> {
         }
     }
 
+    @Nullable
     public E selectUnique(String where, String... params) {
         Cursor cursor = select(where, params);
         try {
