@@ -35,7 +35,7 @@ import org.antlr.v4.runtime.tree.ParseTreeWalker;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
-import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -49,7 +49,7 @@ public class QueriesGenerator {
 
     private final RegistryGenerator generator;
     private final Element queries;
-    private final Element entity;
+    private final TypeElement entity;
     private final Map<String, GeneratedDao> generatedEntities;
 
     public QueriesGenerator(RegistryGenerator generator, Element queries, Map<String, GeneratedDao> generatedDao) {
@@ -57,12 +57,8 @@ public class QueriesGenerator {
         this.queries = queries;
         this.generatedEntities = generatedDao;
 
-        try {
-            queries.getAnnotation(Queries.class).value();
-            throw new IllegalStateException();
-        } catch (MirroredTypeException e) {
-            entity = generator.getProcessingEnv().getTypeUtils().asElement(e.getTypeMirror());
-        }
+        Queries annotation = queries.getAnnotation(Queries.class);
+        entity = generator.getAnnotationElement(annotation::value);
     }
 
     public GeneratedDao getDao() {

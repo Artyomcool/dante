@@ -30,10 +30,9 @@ import com.squareup.javapoet.*;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.PackageElement;
+import javax.lang.model.element.*;
+import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.TypeMirror;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -206,6 +205,19 @@ public class RegistryGenerator {
 
     public static String getPackage(Element element) {
         return getPackageElement(element).getQualifiedName().toString();
+    }
+
+    public TypeMirror getAnnotationValue(Runnable extractor) {
+        try {
+            extractor.run();
+            throw new IllegalStateException("MirroredTypeException should be thrown");
+        } catch (MirroredTypeException e) {
+            return e.getTypeMirror();
+        }
+    }
+
+    public TypeElement getAnnotationElement(Runnable extractor) {
+        return (TypeElement) processingEnv.getTypeUtils().asElement(getAnnotationValue(extractor));
     }
 
     public void codeGenError(Element element, String error) {

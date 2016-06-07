@@ -31,8 +31,6 @@ import com.github.artyomcool.dante.core.property.Property;
 import com.squareup.javapoet.*;
 
 import javax.lang.model.element.*;
-import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.MirroredTypeException;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -78,13 +76,7 @@ public class DaoGenerator {
 
         entityTypeName = TypeName.get(entity.asType());
 
-        TypeElement daoClass;
-        try {
-            annotation.dao();
-            throw new IllegalStateException("Excpetion should be thrown");
-        } catch (MirroredTypeException e) {
-            daoClass = (TypeElement) ((DeclaredType) e.getTypeMirror()).asElement();
-        }
+        TypeElement daoClass = registryGenerator.getAnnotationElement(annotation::dao);
 
         int typesCount = daoClass.getTypeParameters().size();
         if (typesCount == 0) {
