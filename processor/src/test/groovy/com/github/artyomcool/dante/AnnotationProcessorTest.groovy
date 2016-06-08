@@ -150,10 +150,10 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert delegate.get(entity) == '123'
     }
 
-    @Ignore("byte[] fields are not supported yet")
     @Test
     void justIdBlob() {
         def registry = justId('@Id(iWillSetIdByMySelf = true) byte[] id')
+        //TODO verify blob
     }
 
     @Test(expected = RuntimeException)
@@ -209,7 +209,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         assert testQueryClass.isAssignableFrom(queries.class)
     }
@@ -244,7 +244,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
@@ -304,7 +304,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             inserted << e
         }
 
-        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         List result = queries.byTextWithLimit('text %', 7)
 
@@ -354,7 +354,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             inserted << e
         }
 
-        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         List result = queries.greaterThenSum(10, 20)
 
@@ -406,7 +406,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             inserted << e
         }
 
-        def testQueryClass = registry.class.classLoader.loadClass("test.T\$TestQuery")
+        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         (0..5).each {
             List result = queries.greaterThenAPlusField(5)

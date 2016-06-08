@@ -23,6 +23,7 @@
 package com.github.artyomcool.dante.core.property;
 
 import android.database.Cursor;
+import android.database.sqlite.SQLiteStatement;
 
 public abstract class BlobProperty<E> extends AbstractProperty<E> {
 
@@ -33,9 +34,21 @@ public abstract class BlobProperty<E> extends AbstractProperty<E> {
     }
 
     @Override
+    public void bind(SQLiteStatement statement, int index, E entity) {
+        statement.bindBlob(index, get(entity));
+    }
+
+    @Override
     public void readFromCursor(Cursor cursor, int index, E entity) {
         set(cursor.getBlob(index), entity);
     }
+
+    @Override
+    public String getDefaultValue() {
+        return isNullable() ? null : "x''";
+    }
+
+    public abstract byte[] get(E entity);
 
     public abstract void set(byte[] value, E entity);
 }

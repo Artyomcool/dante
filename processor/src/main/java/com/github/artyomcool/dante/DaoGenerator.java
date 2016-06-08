@@ -25,6 +25,7 @@ package com.github.artyomcool.dante;
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
 import com.github.artyomcool.dante.annotation.SinceVersion;
+import com.github.artyomcool.dante.core.property.BlobProperty;
 import com.github.artyomcool.dante.core.property.BoxingTypeProperty;
 import com.github.artyomcool.dante.core.property.IdProperty;
 import com.github.artyomcool.dante.core.property.Property;
@@ -310,6 +311,12 @@ public class DaoGenerator {
             return;
         }
 
+        if (isByteArray(fieldTypeName)) {
+            builder.add("$L", getBlobProperty(field));
+
+            return;
+        }
+
         if (fieldTypeName.isPrimitive()) {
             builder.add("$L", primitiveProperty(field));
             return;
@@ -348,7 +355,12 @@ public class DaoGenerator {
     }
 
     private TypeSpec getStringProperty(VariableElement field) {
-        return property(field, TypeName.get(field.asType()), ", " + isNullable(field));
+        return propertyByTypeName(field, TypeName.get(field.asType()), ", " + isNullable(field));
+    }
+
+    private TypeSpec getBlobProperty(VariableElement field) {
+        ClassName rawType = ClassName.get(BlobProperty.class);
+        return property(field, TypeName.get(field.asType()), ", " + isNullable(field), rawType);
     }
 
     private boolean isNullable(VariableElement field) {
@@ -366,15 +378,19 @@ public class DaoGenerator {
         if (!typeName.isPrimitive()) {
             typeName = typeName.unbox();
         }
-        return property(field, typeName, "");
+        return propertyByTypeName(field, typeName, "");
     }
 
-    private TypeSpec property(VariableElement field, TypeName typeName, String extraParams) {
+    private TypeSpec propertyByTypeName(VariableElement field, TypeName typeName, String extraParams) {
         String name = getSimpleName(typeName);
         ClassName rawType = ClassName.get(
                 "com.github.artyomcool.dante.core.property",
                 capitalize(name) + "Property"
         );
+        return property(field, typeName, extraParams, rawType);
+    }
+
+    private TypeSpec property(VariableElement field, TypeName typeName, String extraParams, ClassName rawType) {
         ParameterizedTypeName superclass = ParameterizedTypeName.get(
                 rawType,
                 TypeName.get(entity.asType())
