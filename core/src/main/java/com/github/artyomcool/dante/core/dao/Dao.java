@@ -152,16 +152,11 @@ public abstract class Dao<E> {
         }
     }
 
-    public void insert(E element) {
+    public void insert(E entity) {
         SQLiteStatement insertStatement = ensureInsertQuery();
 
         Property<E>[] properties = propertiesArray();
-        for (int i = 0; i < properties.length; i++) {
-            properties[i].bind(insertStatement, i, element);
-        }
-        long id = insertStatement.executeInsert();
-        getIdProperty().afterInsert(element, id);
-        toCache(id, element);
+        insert(entity, insertStatement, properties);
     }
 
     public void insert(Iterable<E> elements) {
@@ -174,11 +169,7 @@ public abstract class Dao<E> {
         try {
             Property<E>[] properties = propertiesArray();
             for (E e : elements) {
-                for (int i = 0; i < properties.length; i++) {
-                    properties[i].bind(insertStatement, i, e);
-                }
-                long id = insertStatement.executeInsert();
-                getIdProperty().afterInsert(e, id);
+                insert(e, insertStatement, properties);
             }
             if (needTransaction) {
                 db.setTransactionSuccessful();
@@ -190,14 +181,20 @@ public abstract class Dao<E> {
         }
     }
 
+    private void insert(E entity, SQLiteStatement insertStatement, Property<E>[] properties) {
+        for (int i = 0; i < properties.length; i++) {
+            properties[i].bind(insertStatement, i, entity);
+        }
+        long id = insertStatement.executeInsert();
+        getIdProperty().afterInsert(entity, id);
+        toCache(id, entity);
+    }
+
     public void update(E element) {
         SQLiteStatement updateStatement = ensureUpdateQuery();
 
         Property<E>[] properties = propertiesArray();
-        for (int i = 0; i < properties.length; i++) {
-            properties[i].bind(updateStatement, i++, element);
-        }
-        updateStatement.execute();
+        update(element, updateStatement, properties);
     }
 
     public void update(Iterable<E> elements) {
@@ -210,10 +207,7 @@ public abstract class Dao<E> {
         try {
             Property<E>[] properties = propertiesArray();
             for (E e : elements) {
-                for (int i = 0; i < properties.length; i++) {
-                    properties[i].bind(updateStatement, i++, e);
-                }
-                updateStatement.execute();
+                update(e, updateStatement, properties);
             }
             if (needTransaction) {
                 db.setTransactionSuccessful();
@@ -223,6 +217,13 @@ public abstract class Dao<E> {
                 db.endTransaction();
             }
         }
+    }
+
+    private void update(E element, SQLiteStatement updateStatement, Property<E>[] properties) {
+        for (int i = 0; i < properties.length; i++) {
+            properties[i].bind(updateStatement, i++, element);
+        }
+        updateStatement.execute();
     }
 
     private E getFromCache(long id) {
