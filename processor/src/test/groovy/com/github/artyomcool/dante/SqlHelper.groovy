@@ -289,6 +289,9 @@ class SqlHelper {
                 compileStatement: { String s ->
                     def params = []
                     return [
+                            execute: {
+                                sql.execute(s, params)
+                            },
                             executeInsert: {
                                 sql.executeInsert(s, params)[0][0]  //TODO not true for already defined id
                             },

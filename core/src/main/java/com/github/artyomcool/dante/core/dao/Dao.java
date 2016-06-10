@@ -61,6 +61,9 @@ public abstract class Dao<E> {
     @Nullable
     private SQLiteStatement updateStatement = null;
 
+    @Nullable
+    private SQLiteStatement deleteByIdStatement = null;
+
     protected Dao(SQLiteDatabase db, int sinceVersion) {
         this.db = db;
         this.sinceVersion = sinceVersion;
@@ -219,6 +222,13 @@ public abstract class Dao<E> {
         }
     }
 
+    public void deleteById(long id) {
+        SQLiteStatement sqLiteStatement = ensureDeleteQuery();
+        sqLiteStatement.bindLong(0, id);
+        sqLiteStatement.execute();
+        removeFromCache(id);
+    }
+
     private void update(E element, SQLiteStatement updateStatement, Property<E>[] properties) {
         for (int i = 0; i < properties.length; i++) {
             properties[i].bind(updateStatement, i++, element);
@@ -234,6 +244,10 @@ public abstract class Dao<E> {
         cache.put(id, element);
     }
 
+    private void removeFromCache(long id) {
+        cache.remove(id);
+    }
+
     private void ensureIdColumnIndex() {
         if (idColumnIndex == -1) {
             idColumnIndex = getProperties().indexOf(getIdProperty());
@@ -242,9 +256,9 @@ public abstract class Dao<E> {
 
     private SQLiteStatement ensureInsertQuery() {
         if (insertStatement == null) {
-            tmp.append("INSERT INTO ")
+            tmp.append("INSERT INTO '")
                     .append(getTableName())
-                    .append(" (");
+                    .append("' (");
 
             allColumns(tmp);
 
@@ -264,7 +278,7 @@ public abstract class Dao<E> {
         if (updateStatement == null) {
             tmp.append("UPDATE '")
                     .append(getTableName())
-                    .append("SET ");
+                    .append("' SET ");
 
             for (Property<E> property : propertiesArray()) {
                 tmp.append(property.getColumnName()).append(" = ?").append(',');
@@ -279,6 +293,17 @@ public abstract class Dao<E> {
             updateStatement = db.compileStatement(recycle(tmp));
         }
         return updateStatement;
+    }
+
+    private SQLiteStatement ensureDeleteQuery() {
+        if (deleteByIdStatement == null) {
+            tmp.append("DELETE FROM '")
+                    .append(getTableName())
+                    .append("' WHERE _ROWID_ = ?");
+
+            deleteByIdStatement = db.compileStatement(recycle(tmp));
+        }
+        return deleteByIdStatement;
     }
 
     public void createTable() {

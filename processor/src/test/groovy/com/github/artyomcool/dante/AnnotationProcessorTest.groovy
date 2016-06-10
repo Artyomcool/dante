@@ -416,6 +416,36 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void deleteById() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile: """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+                    @Id
+                    Long id;
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+
+        def dao = registry.dao[0]
+        def e = dao.createEntity()
+        e.id = 7
+
+        dao.insert(e)
+        dao.deleteById(7)
+
+        assert dao.selectList('').isEmpty()
+    }
+
+    @Test
     void entityWithCustomSpecificDao() {
         DaoRegistry registry = generateRegistry([
         [
