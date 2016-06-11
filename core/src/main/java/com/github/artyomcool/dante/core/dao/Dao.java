@@ -35,6 +35,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Base class for all DAO. In most cases should be accessed through {@link DaoMaster#dao(Class)} with entity class.
+ * Usable for inserting, updating and deleting entities. In most cases shouldn't be used for direct queries.
+ * Use {@link DaoMaster#queries(Class)} for that.
+ * @param <E>
+ */
 @SuppressWarnings("unused")
 @NotThreadSafe
 public abstract class Dao<E> {
@@ -91,13 +97,23 @@ public abstract class Dao<E> {
         return properties;
     }
 
+    /**
+     * Returns DB version in which this field where presented. Used for automatic migration.
+     * @return DB version since field exists
+     */
     public int getSinceVersion() {
         return sinceVersion;
     }
 
+    /**
+     * Creates one entity from current row of cursor. In case the entity with the same id was already created,
+     * it will be just returned, without re-reading from cursor.
+     * @param cursor initialized cursor for perform reading values
+     * @return a new entity initialized from cursor columns or the old entity with the same id
+     */
     public E fromCursor(Cursor cursor) {
         ensureIdColumnIndex();
-        long id = cursor.getLong(idColumnIndex);
+        long id = cursor.getLong(idColumnIndex);    //FIXME it is not true for String primary key
         E result = getFromCache(id);
 
         if (result != null) {
