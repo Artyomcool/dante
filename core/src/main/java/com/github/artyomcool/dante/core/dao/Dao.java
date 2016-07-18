@@ -25,8 +25,7 @@ package com.github.artyomcool.dante.core.dao;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteStatement;
-import com.github.artyomcool.dante.core.property.IdProperty;
-import com.github.artyomcool.dante.core.property.Property;
+import com.github.artyomcool.dante.core.Property;
 import net.jcip.annotations.NotThreadSafe;
 
 import javax.annotation.Nullable;
@@ -47,16 +46,11 @@ public abstract class Dao<E> {
 
     private final StringBuilder tmp = new StringBuilder();
 
-    private final LongWeakValueIdentityHashMap<E> cache = new LongWeakValueIdentityHashMap<>();
-
     private final SQLiteDatabase db;
 
     private final int sinceVersion;
 
     private int idColumnIndex = -1;
-
-    @Nullable
-    private Property<E>[] properties = null;
 
     @Nullable
     private String selectQuery = null;
@@ -77,25 +71,23 @@ public abstract class Dao<E> {
 
     protected abstract String getTableName();
 
-    protected abstract List<Property<E>> getProperties();
+    protected abstract List<Property> getProperties();
 
-    protected abstract IdProperty<E> getIdProperty();
+    protected abstract Property getIdProperty();
 
-    protected abstract E createEntity();
+    protected abstract E createEntity(Cursor cursor);
 
-    private Property<E>[] propertiesArray() {
-        if (this.properties == null) {
-            List<Property<E>> propertiesList = getProperties();
-            @SuppressWarnings("unchecked")
-            Property<E>[] properties = new Property[propertiesList.size()];
-            int i = 0;
-            for (Property<E> property : propertiesList) {
-                properties[i++] = property;
-            }
-            this.properties = properties;
-        }
-        return properties;
-    }
+    protected abstract void bind(E entity, SQLiteStatement statement);
+
+    protected abstract void bindId(E entity, SQLiteStatement statement, int index);
+
+    protected abstract void updateRowId(E entity, long rowId);
+
+    protected abstract E getFromCache(Cursor cursor, int idColumnIndex);
+
+    protected abstract void putIntoCache(E entity);
+
+    protected abstract void removeFromCache(E entity);
 
     /**
      * Returns DB version in which this field where presented. Used for automatic migration.
@@ -108,28 +100,30 @@ public abstract class Dao<E> {
     /**
      * Creates one entity from current row of cursor. In case the entity with the same id was already created,
      * it will be just returned, without re-reading from cursor.
-     * @param cursor initialized cursor for perform reading values
-     * @return a new entity initialized from cursor columns or the old entity with the same id
+     * @param cursor initialized cursor to perform reading values
+     * @return a new entity initialized from the cursor columns or the old entity with the same id
      */
     public E fromCursor(Cursor cursor) {
-        ensureIdColumnIndex();
-        long id = cursor.getLong(idColumnIndex);    //FIXME it is not true for String primary key
-        E result = getFromCache(id);
+        E result = getFromCache(cursor, getIdColumnIndex());
 
         if (result != null) {
             return result;
         }
 
-        result = createEntity();
-        Property<E>[] properties = propertiesArray();
-        for (int i = 0; i < properties.length; i++) {
-            properties[i].readFromCursor(cursor, i, result);
-        }
+        result = createEntity(cursor);
+        putIntoCache(result);
         return result;
     }
 
+    private int getIdColumnIndex() {
+        if (idColumnIndex == -1) {
+            idColumnIndex = getProperties().indexOf(getIdProperty());
+        }
+        return idColumnIndex;
+    }
+
     private void allColumns(StringBuilder builder) {
-        for (Property<E> property : propertiesArray()) {
+        for (Property property : getProperties()) {
             builder.append(property.getColumnName()).append(',');
         }
         builder.setLength(builder.length() - 1);
@@ -174,8 +168,14 @@ public abstract class Dao<E> {
     public void insert(E entity) {
         SQLiteStatement insertStatement = ensureInsertQuery();
 
-        Property<E>[] properties = propertiesArray();
-        insert(entity, insertStatement, properties);
+        executeInsert(entity, insertStatement);
+    }
+
+    private void executeInsert(E entity, SQLiteStatement insertStatement) {
+        bind(entity, insertStatement);
+        long id = insertStatement.executeInsert();
+        updateRowId(entity, id);
+        putIntoCache(entity);
     }
 
     public void insert(Iterable<E> elements) {
@@ -186,9 +186,8 @@ public abstract class Dao<E> {
             db.beginTransaction();
         }
         try {
-            Property<E>[] properties = propertiesArray();
             for (E e : elements) {
-                insert(e, insertStatement, properties);
+                executeInsert(e, insertStatement);
             }
             if (needTransaction) {
                 db.setTransactionSuccessful();
@@ -200,20 +199,15 @@ public abstract class Dao<E> {
         }
     }
 
-    private void insert(E entity, SQLiteStatement insertStatement, Property<E>[] properties) {
-        for (int i = 0; i < properties.length; i++) {
-            properties[i].bind(insertStatement, i, entity);
-        }
-        long id = insertStatement.executeInsert();
-        getIdProperty().afterInsert(entity, id);
-        toCache(id, entity);
-    }
-
     public void update(E element) {
         SQLiteStatement updateStatement = ensureUpdateQuery();
 
-        Property<E>[] properties = propertiesArray();
-        update(element, updateStatement, properties);
+        executeUpdate(element, updateStatement);
+    }
+
+    private void executeUpdate(E element, SQLiteStatement updateStatement) {
+        bind(element, updateStatement);
+        updateStatement.execute();
     }
 
     public void update(Iterable<E> elements) {
@@ -224,9 +218,8 @@ public abstract class Dao<E> {
             db.beginTransaction();
         }
         try {
-            Property<E>[] properties = propertiesArray();
             for (E e : elements) {
-                update(e, updateStatement, properties);
+                executeUpdate(e, updateStatement);
             }
             if (needTransaction) {
                 db.setTransactionSuccessful();
@@ -238,36 +231,11 @@ public abstract class Dao<E> {
         }
     }
 
-    public void deleteById(long id) {
+    public void delete(E entity) {
         SQLiteStatement sqLiteStatement = ensureDeleteQuery();
-        sqLiteStatement.bindLong(0, id);
+        bindId(entity, sqLiteStatement, 1);
         sqLiteStatement.execute();
-        removeFromCache(id);
-    }
-
-    private void update(E element, SQLiteStatement updateStatement, Property<E>[] properties) {
-        for (int i = 0; i < properties.length; i++) {
-            properties[i].bind(updateStatement, i++, element);
-        }
-        updateStatement.execute();
-    }
-
-    private E getFromCache(long id) {
-        return cache.get(id);
-    }
-
-    private void toCache(long id, E element) {
-        cache.put(id, element);
-    }
-
-    private void removeFromCache(long id) {
-        cache.remove(id);
-    }
-
-    private void ensureIdColumnIndex() {
-        if (idColumnIndex == -1) {
-            idColumnIndex = getProperties().indexOf(getIdProperty());
-        }
+        removeFromCache(entity);
     }
 
     private SQLiteStatement ensureInsertQuery() {
@@ -280,7 +248,8 @@ public abstract class Dao<E> {
 
             tmp.append(") VALUES (");
 
-            for (int i = propertiesArray().length; i > 1; i--) {
+            int size = getProperties().size();
+            for (int i = 1; i < size; i++) {
                 tmp.append("?,");
             }
             tmp.append("?)");
@@ -296,7 +265,7 @@ public abstract class Dao<E> {
                     .append(getTableName())
                     .append("' SET ");
 
-            for (Property<E> property : propertiesArray()) {
+            for (Property property : getProperties()) {
                 tmp.append(property.getColumnName()).append(" = ?").append(',');
             }
 
@@ -330,7 +299,7 @@ public abstract class Dao<E> {
         db.execSQL(createTable(true, version));
     }
 
-    public void ensureProperty(Property<?> property, int version) {
+    public void ensureProperty(Property property, int version) {
         String defaultValue = property.getDefaultValue() == null ? "" : " DEFAULT " + property.getDefaultValue();
         db.execSQL("ALTER TABLE '" + getTableName() + "' " +
                 "ADD COLUMN " + property.getColumnName() + " " + property.getColumnType() +
@@ -343,8 +312,8 @@ public abstract class Dao<E> {
             tmp.append("IF NOT EXISTS ");
         }
         tmp.append('\'').append(getTableName()).append('\'').append('(');
-        for (Property<E> property : propertiesArray()) {
-            if (property.sinceVersion() > version) {
+        for (Property property : getProperties()) {
+            if (property.getSinceVersion() > version) {
                 continue;
             }
             tmp.append(property.getColumnName()).append(' ')

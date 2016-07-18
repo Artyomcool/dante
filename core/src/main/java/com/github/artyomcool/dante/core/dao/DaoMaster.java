@@ -23,7 +23,7 @@
 package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
-import com.github.artyomcool.dante.core.property.Property;
+import com.github.artyomcool.dante.core.Property;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,8 +94,8 @@ public class DaoMaster implements Registry {
                     }
                 });
             } else {
-                for (final Property<?> property : dao.getProperties()) {
-                    if (property.sinceVersion() == version) {
+                for (final Property property : dao.getProperties()) {
+                    if (property.getSinceVersion() == version) {
                         result.add(new Migration() {
                             @Override
                             public void migrate() {

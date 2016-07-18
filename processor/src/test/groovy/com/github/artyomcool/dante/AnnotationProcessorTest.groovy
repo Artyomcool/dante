@@ -24,12 +24,10 @@ package com.github.artyomcool.dante
 
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
+import com.github.artyomcool.dante.core.Property
 import com.github.artyomcool.dante.core.dao.Dao
 import com.github.artyomcool.dante.core.dao.DaoMaster
 import com.github.artyomcool.dante.core.dao.DaoRegistry
-import com.github.artyomcool.dante.core.property.DelegatingProperty
-import com.github.artyomcool.dante.core.property.IdProperty
-import com.github.artyomcool.dante.core.property.Property
 import org.junit.Before
 import org.junit.Ignore
 import org.junit.Test
@@ -74,30 +72,10 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     def verifyIntegerRegistry(DaoRegistry registry) {
         Dao<?> dao = registry.dao[0]
-        def entity = dao.createEntity()
 
-        IdProperty<?> property = dao.getIdProperty()
-        assert property.getColumnType() == 'INTEGER'
-
-        Property<?> delegate = getField(getField(property, 'delegate'), 'delegate')
-
-        try {
-            def result = delegate.get(entity)
-            throw new IllegalStateException("Should be NPE, but result returned: " + result)
-        } catch (NullPointerException ignored) {
-            //expected
-        }
-
-        assert property.isNull(entity)
-        entity.id = 123
-        assert !property.isNull(entity)
-        assert delegate.get(entity) == 123
-    }
-
-    private static Object getField(def obj, def name) {
-        def field = DelegatingProperty.declaredFields.find { it.name == name }
-        field.setAccessible(true)
-        field.get(obj)
+        Property property = dao.idProperty
+        assert property.columnType == 'INTEGER'
+        assert property.columnName == 'ID'
     }
 
     @Test
@@ -124,6 +102,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         verifyIntegerRegistry(registry)
     }
 
+    @Ignore("Cache for booleans is not implemented yet")
     @Test
     void justIdBoolean() {
         def registry = justId('@Id Boolean id')
@@ -132,24 +111,16 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void justIdString() {
-        def registry = justId('@Id(iWillSetIdByMySelf = true) String id')
+        def registry = justId('@Id(iWillSetIdByMySelf = true) String strId')
 
         Dao<?> dao = registry.dao[0]
-        def entity = dao.createEntity()
 
-        IdProperty<?> idProperty = dao.getIdProperty()
-        assert idProperty.getColumnType() == 'TEXT'
-
-        assert idProperty == dao.getProperties()[0]
-
-        assert idProperty.getColumnType() == 'TEXT'
-
-        Property delegate = getField(idProperty, 'delegate')
-        assert delegate.get(entity) == null
-        entity.id = '123'
-        assert delegate.get(entity) == '123'
+        Property idProperty = dao.getIdProperty()
+        assert idProperty.columnType == 'TEXT'
+        assert idProperty.columnName == 'STR_ID'
     }
 
+    @Ignore("Cache for blobs is not implemented yet")
     @Test
     void justIdBlob() {
         def registry = justId('@Id(iWillSetIdByMySelf = true) byte[] id')
@@ -244,17 +215,19 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
+        def testClass = registry.class.classLoader.loadClass('test.T');
+
         def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
-        def e = dao.createEntity()
+        def e = testClass.newInstance()
         e.id = 1
         dao.insert(e)
 
         assert queries.byId(7) == null
 
-        e = dao.createEntity()
+        e = testClass.newInstance()
         e.id = 7
         dao.insert(e)
 
@@ -292,12 +265,14 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
+        def testClass = registry.class.classLoader.loadClass('test.T')
+
         def dao = registry.dao[0]
 
         def inserted = []
 
         (1..10).each {
-            def e = dao.createEntity()
+            def e = testClass.newInstance()
             e.id = it
             e.text = "text $it"
             dao.insert(e)
@@ -341,13 +316,14 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
         def dao = registry.dao[0]
 
         def inserted = []
 
         (1..10).each {
-            def e = dao.createEntity()
+            def e = testClass.newInstance()
             e.id = it
             e.value = it * 10
             dao.insert(e)
@@ -393,13 +369,14 @@ class AnnotationProcessorTest extends AbstractAptTest {
          ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
         def dao = registry.dao[0]
 
         def inserted = []
 
         (1..10).each {
-            def e = dao.createEntity()
+            def e = testClass.newInstance()
             e.id = it
             e.value = it
             dao.insert(e)
@@ -444,12 +421,13 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
         def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
-        def e = dao.createEntity()
+        def e = testClass.newInstance()
         e.id = 1
         dao.insert(e)
 
@@ -459,7 +437,6 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert q1.is(q2) && q1.is(e)
     }
 
-    @Ignore('No implementation for cache with string keys')
     @Test
     void stringIdentity() {
         DaoRegistry registry = generateRegistry([[
@@ -489,12 +466,13 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
         def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
-        def e = dao.createEntity()
+        def e = testClass.newInstance()
         e.id = 'str'
         dao.insert(e)
 
@@ -505,7 +483,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
-    void deleteById() {
+    void delete() {
         DaoRegistry registry = generateRegistry([[
             fullClassName: "test.T",
             sourceFile: """
@@ -523,13 +501,14 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
         def dao = registry.dao[0]
-        def e = dao.createEntity()
+        def e = testClass.newInstance()
         e.id = 7
 
         dao.insert(e)
-        dao.deleteById(7)
+        dao.delete(e)
 
         assert dao.selectList('').isEmpty()
     }
@@ -664,14 +643,15 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
 
         DaoMaster master = new DaoMaster({database}, registry)
-
         master.init()
+
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
         def dao = registry.dao[0]
 
-        dao.insert(dao.createEntity())
+        dao.insert(testClass.newInstance())
 
-        def t1 = dao.createEntity()
+        def t1 = testClass.newInstance()
         t1.integer2 = 7
         dao.insert(t1)
 
@@ -727,22 +707,28 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def registry = generateRegistry([t1])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        assert database.version == 1
 
+        assert database.version == 1
 
         registry = generateRegistry([t1, t2])
         master = new DaoMaster({database}, registry)
         master.init()
         assert database.version == 2
 
-        def e1 = registry.dao[0].createEntity()
-        registry.dao[0].insert(e1)
+        def test1Class = registry.class.classLoader.loadClass('test.T1')
+        def test2Class = registry.class.classLoader.loadClass('test.T2')
 
-        def e2 = registry.dao[1].createEntity()
-        registry.dao[1].insert(e2)
+        def dao1 = registry.dao.find { it.getTableName() == 'T1' }
+        def dao2 = registry.dao.find { it.getTableName() == 'T2' }
 
-        assert registry.dao[0].selectUnique('') == e1
-        assert registry.dao[1].selectUnique('') == e2
+        def e1 = test1Class.newInstance()
+        dao1.insert(e1)
+
+        def e2 = test2Class.newInstance()
+        dao2.insert(e2)
+
+        assert dao1.selectUnique('') == e1
+        assert dao2.selectUnique('') == e2
     }
 
     @Test
@@ -787,9 +773,11 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def registry = generateRegistry([t1])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
+
         assert database.version == 1
 
-        def e1 = registry.dao[0].createEntity()
+        def e1 = testClass.newInstance()
         registry.dao[0].insert(e1)
         assert e1.id
 
@@ -851,9 +839,11 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def registry = generateRegistry([t1])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
+
         assert database.version == 1
 
-        def e1 = registry.dao[0].createEntity()
+        def e1 = testClass.newInstance()
         registry.dao[0].insert(e1)
         assert e1.id
 
@@ -892,10 +882,10 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
 
         DaoMaster master = new DaoMaster({database}, registry)
-
         master.init()
+        def testClass = registry.class.classLoader.loadClass('test.T')
 
-        def entity = registry.dao[0].createEntity()
+        def entity = testClass.newInstance()
         try {
             registry.dao[0].insert(entity)
             throw new IllegalStateException('Should be aborted due to constraint violation')

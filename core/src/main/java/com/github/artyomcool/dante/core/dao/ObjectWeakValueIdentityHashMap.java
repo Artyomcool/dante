@@ -4,13 +4,14 @@ import javax.annotation.Nullable;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
-import java.util.IdentityHashMap;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ObjectWeakValueIdentityHashMap<K, T> {
 
     private final ReferenceQueue<T> referenceQueue = new ReferenceQueue<>();
 
-    private final IdentityHashMap<K, WeakReference<T>> backingMap = new IdentityHashMap<>();
+    private final Map<K, WeakReference<T>> backingMap = new HashMap<>();
 
     @Nullable
     public T put(K key, T value) {

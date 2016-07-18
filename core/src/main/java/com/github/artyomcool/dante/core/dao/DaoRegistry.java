@@ -23,7 +23,7 @@
 package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
-import com.github.artyomcool.dante.core.property.Property;
+import com.github.artyomcool.dante.core.Property;
 
 import java.util.*;
 
@@ -67,8 +67,8 @@ public abstract class DaoRegistry implements Registry {
         int version = 1;
         for (Dao<?> dao : daoList) {
             version = Math.max(dao.getSinceVersion(), version);
-            for (Property<?> property : dao.getProperties()) {
-                version = Math.max(property.sinceVersion(), version);
+            for (Property property : dao.getProperties()) {
+                version = Math.max(property.getSinceVersion(), version);
             }
         }
         return version;

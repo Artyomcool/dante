@@ -296,19 +296,19 @@ class SqlHelper {
                                 sql.executeInsert(s, params)[0][0]  //TODO not true for already defined id
                             },
                             bindNull     : { int index ->
-                                params[index] = null
+                                params[index - 1] = null
                             },
                             bindLong     : { int index, long value ->
-                                params[index] = value
+                                params[index - 1] = value
                             },
                             bindDouble   : { int index, double value ->
-                                params[index] = value
+                                params[index - 1] = value
                             },
                             bindString   : { int index, String value ->
-                                params[index] = value
+                                params[index - 1] = value
                             },
                             bindBlob     : { int index, byte[] value ->
-                                params[index] = value
+                                params[index - 1] = value
                             }
                     ] as SQLiteStatement
                 },

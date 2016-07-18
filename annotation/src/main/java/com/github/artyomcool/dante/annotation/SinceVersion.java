@@ -29,6 +29,10 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 public @interface SinceVersion {
 
+    public static final String NOT_SPECIFIED = "com.github.artyomcool.dante.annotation.SinceVersion#NOT_SPECIFIED";
+
     int value();
+
+    String defaultValue() default NOT_SPECIFIED;
 
 }

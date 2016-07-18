@@ -181,6 +181,14 @@ public class RegistryGenerator {
         }
     }
 
+    public static TypeName tryUnwrap(TypeName typeName) {
+        try {
+            return typeName.unbox();
+        } catch (UnsupportedOperationException e) {
+            return typeName;
+        }
+    }
+
     public static String capitalize(String text) {
         if (text.isEmpty()) {
             return "";
