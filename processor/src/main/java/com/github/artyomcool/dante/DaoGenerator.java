@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 
 import static com.github.artyomcool.dante.RegistryGenerator.*;
 import static javax.lang.model.element.Modifier.PROTECTED;
-import static javax.lang.model.element.Modifier.PUBLIC;
 import static javax.lang.model.util.ElementFilter.fieldsIn;
 
 public class DaoGenerator {
@@ -136,6 +135,7 @@ public class DaoGenerator {
     }
 
     public GeneratedDao generate() throws IOException {
+        verifyIdStatement();
 
         TypeSpec.Builder daoClass = TypeSpec.classBuilder(entityClassName + "_Dao_")
                 .addOriginatingElement(entity)
@@ -213,10 +213,10 @@ public class DaoGenerator {
     private CodeBlock genIdInitializer() {
         return CodeBlock.builder()
                 .add("new $T()", Property.Builder.class).indent().indent()
-                .add(".columnName($S)", columnName(idField))
-                .add(".columnType($S)", columnType(idField))
-                .add(".columnExtraDefinition($S)", idExtraDefinition(idField))
-                .add(".build()")
+                .add("\n.columnName($S)", columnName(idField))
+                .add("\n.columnType($S)", columnType(idField))
+                .add("\n.columnExtraDefinition($S)", idExtraDefinition(idField))
+                .add("\n.build()").unindent().unindent()
                 .build();
     }
 
@@ -226,13 +226,13 @@ public class DaoGenerator {
         }
 
         return CodeBlock.builder()
-                .add("new $T()", Property.Builder.class)
-                .add(".sinceVersion($L)", sinceVersion(field))
-                .add(".columnName($S)", columnName(field))
-                .add(".columnType($S)", columnType(field))
-                .add(".columnExtraDefinition($S)", extraDefinition(field))
-                .add(".defaultValue($S)", defaultValue(field))
-                .add(".build()")
+                .add("new $T()", Property.Builder.class).indent().indent()
+                .add("\n.sinceVersion($L)", sinceVersion(field))
+                .add("\n.columnName($S)", columnName(field))
+                .add("\n.columnType($S)", columnType(field))
+                .add("\n.columnExtraDefinition($S)", extraDefinition(field))
+                .add("\n.defaultValue($S)", defaultValue(field))
+                .add("\n.build()").unindent().unindent()
                 .build();
     }
 
@@ -624,30 +624,26 @@ public class DaoGenerator {
                 return builder.beginControlFlow("if (value == null)")
                         .addStatement("statement.bindNull($L)", index)
                         .nextControlFlow("else")
-                        .addStatement("statement.bindDouble($L, (long) value)", index)
+                        .addStatement("statement.bindDouble($L, value.doubleValue())", index)
                         .endControlFlow()
                         .build();
             case "byte[]":
-                return builder
+                return builder.beginControlFlow("if (value == null)")
+                        .addStatement("statement.bindNull($L)", index)
+                        .nextControlFlow("else")
                         .addStatement("statement.bindBlob($L, value)", index)
+                        .endControlFlow()
                         .build();
             case "java.lang.String":
-                return builder
+                return builder.beginControlFlow("if (value == null)")
+                        .addStatement("statement.bindNull($L)", index)
+                        .nextControlFlow("else")
                         .addStatement("statement.bindString($L, value)", index)
+                        .endControlFlow()
                         .build();
         }
         registryGenerator.codeGenError(field, "Unsupported type");
         throw new IllegalArgumentException("Unsupported type: " + typeName);
-    }
-
-    private MethodSpec getIdAfterInsert() {
-        return MethodSpec.methodBuilder("afterInsert")
-                .addAnnotation(Override.class)
-                .addModifiers(Modifier.PUBLIC)
-                .addParameter(entityTypeName, "entity")
-                .addParameter(Long.TYPE, "value")
-                .addCode(getAfterIdStatement())
-                .build();
     }
 
     private void verifyIdStatement() {
@@ -685,68 +681,6 @@ public class DaoGenerator {
         }
     }
 
-    private CodeBlock getAfterIdStatement() {
-        Id annotation = idField.getAnnotation(Id.class);
-
-        TypeName typeName = TypeName.get(idField.asType());
-        if (isString(typeName) || isByteArray(typeName)) {
-            if (!annotation.iWillSetIdByMySelf()) {
-                registryGenerator.codeGenError(idField, "You must generate string and blob ids by yourself because sqlite can't generate them for you, so you should set iWillSetIdByMySelf to true in @Id annotation if you are ok with that");
-            }
-            return noCode();
-        }
-
-        if (typeName.isPrimitive()) {
-            if (annotation.iWillSetIdByMySelf() && annotation.treatZeroAsNull()) {
-                registryGenerator.codeGenError(idField, "Both iWillSetIdByMySelf and treatZeroAsNull can not be true: it just makes no sense");
-                return noCode();
-            }
-            if (annotation.iWillSetIdByMySelf()) {
-                return noCode();
-            }
-            if (!annotation.treatZeroAsNull()) {
-                registryGenerator.codeGenError(idField, "You must generate ids by yourself or use a wrapper class because sqlite will treat non null (including zero) values as ids when you will attempt to insert an entity. You should set iWillSetIdByMySelf to true in @Id annotation if you are ok with that. Alternatively you can set treatZeroAsNull to true");
-            }
-            return getSimpleAfterIdStatement();
-        }
-
-        if (annotation.iWillSetIdByMySelf()) {
-            registryGenerator.codeGenError(idField, "iWillSetIdByMySelf makes no sense for wrapper classes");
-            return noCode();
-        }
-
-        if (annotation.treatZeroAsNull()) {
-            registryGenerator.codeGenError(idField, "treatZeroAsNull makes no sense for wrapper classes");
-            return noCode();
-        }
-
-        return getSimpleAfterIdStatement();
-    }
-
-    private CodeBlock getSimpleAfterIdStatement() {
-        TypeName typeName = TypeName.get(idField.asType());
-        if (!typeName.isPrimitive()) {
-            typeName = typeName.unbox();
-        }
-        if (TypeName.LONG == typeName) {
-            return statement("entity.$L = value", idField.getSimpleName());
-        } else if (TypeName.BOOLEAN == typeName) {
-            return statement("entity.$L = value != 0", idField.getSimpleName());
-        } else {
-            return statement("entity.$L = ($T) value", idField.getSimpleName(), typeName);
-        }
-    }
-
-    private CodeBlock getIdIsNull(Element idField, Id idAnnotation) {
-        TypeName fieldType = TypeName.get(idField.asType());
-        if (fieldType.isPrimitive()) {
-            return idAnnotation.treatZeroAsNull()
-                    ? statement("return entity.$L == 0", idField.getSimpleName())
-                    : statement("return false");
-        }
-        return statement("return entity.$L == null", idField.getSimpleName());
-    }
-
     private MethodSpec genTableName() {
         return implement(PROTECTED, String.class, "getTableName")
                 .addStatement("return $S", tableName)
@@ -765,38 +699,17 @@ public class DaoGenerator {
                 .build();
     }
 
-    /*private MethodSpec genCreateEntity() {
-        return implement(PROTECTED, entityTypeName, "createEntity")
-                .addStatement("return new $T()", entityTypeName)
-                .build();
-    }*/
-
     private boolean isNullable(VariableElement field) {
         if (field.asType().getKind().isPrimitive()) {
             return false;
         }
         for (AnnotationMirror annotation : field.getAnnotationMirrors()) {
-            String typeName = annotation.getAnnotationType().toString();
+            String typeName = ClassName.get(annotation.getAnnotationType()).toString();
             if (NOT_NULL_ANNOTATIONS.contains(typeName)) {
                 return false;
             }
         }
         return true;
-    }
-
-    private MethodSpec propertySet(VariableElement field, TypeName typeName) {
-        return implement(PUBLIC, "set")
-                .addParameter(typeName, "value")
-                .addParameter(entityTypeName, "entity")
-                .addStatement("entity.$L = value", field.getSimpleName())
-                .build();
-    }
-
-    private MethodSpec propertyGet(VariableElement field, TypeName typeName) {
-        return implement(PUBLIC, typeName, "get")
-                .addParameter(entityTypeName, "entity")
-                .addStatement("return entity.$L", field.getSimpleName())
-                .build();
     }
 
     private MethodSpec.Builder implement(Modifier modifier, String name) {

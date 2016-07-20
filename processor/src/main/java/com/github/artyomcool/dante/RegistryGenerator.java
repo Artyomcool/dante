@@ -173,6 +173,9 @@ public class RegistryGenerator {
     }
 
     public static boolean isPrimitiveWrapper(TypeName typeName) {
+        if (typeName.isPrimitive()) {
+            return false;
+        }
         try {
             typeName.unbox();
             return true;
@@ -230,5 +233,6 @@ public class RegistryGenerator {
 
     public void codeGenError(Element element, String error) {
         errors.add(new GeneratorError(element, error));
+        System.err.println(element + ": " + error);
     }
 }

@@ -85,6 +85,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void treatZeroAsNullIdLong() {
+        def registry = justId('@Id(treatZeroAsNull = true) long id')
+        verifyIntegerRegistry(registry)
+    }
+
+    @Test
     void justIdInteger() {
         def registry = justId('@Id Integer id')
         verifyIntegerRegistry(registry)
@@ -636,7 +642,13 @@ class AnnotationProcessorTest extends AbstractAptTest {
                     Byte aByte2;
                     boolean aBoolean;
                     Boolean aBoolean2;
-                    //TODO byte[] bytes;
+                    float aFloat;
+                    Float aFloat2;
+                    double aDouble;
+                    Double aDouble2;
+                    char aChar;
+                    Character aChar2;
+                    byte[] bytes;
 
                 }
             """

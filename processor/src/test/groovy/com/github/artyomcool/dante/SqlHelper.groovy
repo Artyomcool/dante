@@ -305,9 +305,15 @@ class SqlHelper {
                                 params[index - 1] = value
                             },
                             bindString   : { int index, String value ->
+                                if (value == null) {
+                                    throw new IllegalArgumentException("the bind value at index " + index + " is null");
+                                }
                                 params[index - 1] = value
                             },
                             bindBlob     : { int index, byte[] value ->
+                                if (value == null) {
+                                    throw new IllegalArgumentException("the bind value at index " + index + " is null");
+                                }
                                 params[index - 1] = value
                             }
                     ] as SQLiteStatement
