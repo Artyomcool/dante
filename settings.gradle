@@ -22,4 +22,4 @@
 
 rootProject.name = 'dante'
 
-include ':processor',':annotation', ':core'
+include ':processor',':annotation', ':core', ':async'

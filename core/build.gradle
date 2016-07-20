@@ -20,18 +20,6 @@
  * SOFTWARE.
  */
 
-buildscript {
-    repositories { jcenter() }
-
-    dependencies {
-        classpath 'com.netflix.nebula:gradle-extra-configurations-plugin:2.2.+'
-    }
-}
-
-apply plugin: 'provided-base'
-
-sourceCompatibility = 1.7
-
 dependencies {
     compile 'net.jcip:jcip-annotations:1.0'
     provided 'com.google.android:android:4.1.1.4'
