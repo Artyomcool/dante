@@ -192,6 +192,46 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void rxQuery() {
+        DaoRegistry registry = generateRegistry([[
+                                                         fullClassName: "test.T",
+                                                         sourceFile: """
+                package test;
+
+                import java.util.List;
+                import rx.Observable;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+                    String text;
+
+                    @Queries(T.class)
+                    public interface TestQuery {
+
+                        @Query(where = "id=\$id")
+                        Observable<T> byId(long id);
+
+                        @Query(where = "id > \$fromId")
+                        Observable<List<T>> byTexts(long fromId);
+
+                    }
+
+                }
+            """
+                                                 ]])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+
+        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def queries = registry.queries(testQueryClass)
+        assert testQueryClass.isAssignableFrom(queries.class)
+    }
+
+    @Test
     void querySingleItem() {
         DaoRegistry registry = generateRegistry([[
             fullClassName: "test.T",

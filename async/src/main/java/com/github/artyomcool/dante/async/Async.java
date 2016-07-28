@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @ThreadSafe
 public class Async {
 
-    private final ExecutorService executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new PriorityBlockingQueue<>());
+    private final ExecutorService executor = new ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, new PriorityBlockingQueue<Runnable>());
 
     private final AtomicLong number = new AtomicLong(Long.MIN_VALUE);
 
@@ -32,7 +32,11 @@ public class Async {
         this.master = master;
     }
 
-    public <T> void execute(DaoTask<T> task, int priority) {
+    public <T> void execute(DaoTask<T> task) {
+        execute(task, 0);
+    }
+
+    public <T> void execute(final DaoTask<T> task, int priority) {
         executor.execute(new ComparableTask(priority, number.getAndIncrement()) {
 
             @Override
@@ -49,8 +53,12 @@ public class Async {
         });
     }
 
-    public <T> Future<T> submit(DaoCallable<T> task, int priority) {
-        FutureTask<T> delegate = new FutureTask<>(new Callable<T>() {
+    public <T> Future<T> submit(DaoCallable<T> task) {
+        return submit(task, 0);
+    }
+
+    public <T> Future<T> submit(final DaoCallable<T> task, int priority) {
+        final FutureTask<T> delegate = new FutureTask<>(new Callable<T>() {
             @Override
             public T call() throws Exception {
                 return task.call(getMaster());

@@ -24,23 +24,23 @@ package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Queries;
 import com.github.artyomcool.dante.annotation.Query;
-import com.squareup.javapoet.JavaFile;
-import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.TypeName;
-import com.squareup.javapoet.TypeSpec;
+import com.squareup.javapoet.*;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.TokenStream;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
+import rx.Observable;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.Callable;
 
 import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
 import static javax.lang.model.util.ElementFilter.methodsIn;
@@ -189,31 +189,18 @@ public class QueriesGenerator {
 
             //TODO remove Query annotation
             MethodSpec.Builder statementBuilder = MethodSpec.overriding(e)
-                    .addStatement("String where = $S", builder)
+                    .addStatement("final String where = $S", builder)
                     .addCode("\n")
-                    .addStatement("String[] params = new String[$L]", paramReplacements.size());
+                    .addStatement("final String[] params = new String[$L]", paramReplacements.size());
 
             int i = 0;
             for (ParamReplacement replacement : paramReplacements) {
                 statementBuilder.addStatement("params[$L] = String.valueOf($L)", i++, replacement.paramName);
             }
 
-            String statement;
-
-            Types types = generator.getProcessingEnv().getTypeUtils();
-            Elements elements = generator.getProcessingEnv().getElementUtils();
-            TypeMirror iterableMirror = elements.getTypeElement(Iterable.class.getName()).asType();
-            if (types.isAssignable(types.erasure(e.getReturnType()), iterableMirror)) {
-                statement = "return dao.selectList(where, params)";
-            } else if (types.isAssignable(entity.asType(), e.getReturnType())) {
-                statement = "return dao.selectUnique(where, params)";
-            } else {
-                generator.codeGenError(e, "Unsupported return type: " + e.getReturnType());
-                statement = "ERROR();";
-            }
             MethodSpec methodSpec = statementBuilder
                     .addCode("\n")
-                    .addStatement(statement)
+                    .addCode(queryReturn(e.getReturnType()))
                     .build();
 
             spec.addMethod(methodSpec);
@@ -229,6 +216,43 @@ public class QueriesGenerator {
         return new GeneratedQuery(this, typeSpec);
     }
 
+    private CodeBlock queryReturn(TypeMirror returnType) {
+        CodeBlock.Builder builder = CodeBlock.builder();
+
+        Types types = generator.getProcessingEnv().getTypeUtils();
+        Elements elements = generator.getProcessingEnv().getElementUtils();
+
+        TypeMirror observableMirror = elements.getTypeElement(Observable.class.getName()).asType();
+
+        if (types.isAssignable(types.erasure(returnType), observableMirror)) {
+            TypeMirror internalReturnType = ((DeclaredType) returnType).getTypeArguments().get(0);
+            TypeName callableType = ParameterizedTypeName.get(
+                    ClassName.get(Callable.class),
+                    ClassName.get(internalReturnType)
+            );
+            TypeSpec callable = TypeSpec.anonymousClassBuilder("")
+                    .superclass(callableType)
+                    .addMethod(
+                            MethodSpec.methodBuilder("call")
+                                    .addAnnotation(Override.class)
+                                    .addModifiers(Modifier.PUBLIC)
+                                    .returns(ClassName.get(internalReturnType))
+                                    .addCode(queryReturn(internalReturnType))
+                            .build()
+                    )
+                    .build();
+            builder.addStatement("return $T.fromCallable($L)", Observable.class, callable);
+            return builder.build();
+        }
+
+        TypeMirror iterableMirror = elements.getTypeElement(Iterable.class.getName()).asType();
+        if (types.isAssignable(types.erasure(returnType), iterableMirror)) {
+            builder.addStatement("return dao.selectList(where, params)");
+        } else {
+            builder.addStatement("return dao.selectUnique(where, params)");
+        }
+        return builder.build();
+    }
 
     private static class TextReplacement {
 
