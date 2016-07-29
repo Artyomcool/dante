@@ -45,6 +45,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
     @Before
     void init() {
         database = SqlHelper.createInMemory()
+        DaoRegistry.metaClass.loadClass = { def name ->
+            return delegate.class.classLoader.loadClass(name)
+        }
     }
 
     DaoRegistry justId(def idField) {
@@ -186,7 +189,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         assert testQueryClass.isAssignableFrom(queries.class)
     }
@@ -226,7 +229,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         assert testQueryClass.isAssignableFrom(queries.class)
     }
@@ -261,9 +264,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testClass = registry.class.classLoader.loadClass('test.T');
+        def testClass = registry.loadClass('test.T');
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
@@ -311,7 +314,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         def dao = registry.dao[0]
 
@@ -325,7 +328,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             inserted << e
         }
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         List result = queries.byTextWithLimit('text %', 7)
 
@@ -362,7 +365,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         def dao = registry.dao[0]
 
@@ -376,7 +379,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             inserted << e
         }
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         List result = queries.greaterThenSum(10, 20)
 
@@ -415,7 +418,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
          ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         def dao = registry.dao[0]
 
@@ -429,7 +432,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             inserted << e
         }
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         (0..5).each {
             List result = queries.greaterThenAPlusField(5)
@@ -467,9 +470,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
@@ -512,9 +515,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
-        def testQueryClass = registry.class.classLoader.loadClass('test.T$TestQuery')
+        def testQueryClass = registry.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
 
         def dao = registry.dao[0]
@@ -547,7 +550,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         def dao = registry.dao[0]
         def e = testClass.newInstance()
@@ -697,7 +700,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         def dao = registry.dao[0]
 
@@ -767,8 +770,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
         master.init()
         assert database.version == 2
 
-        def test1Class = registry.class.classLoader.loadClass('test.T1')
-        def test2Class = registry.class.classLoader.loadClass('test.T2')
+        def test1Class = registry.loadClass('test.T1')
+        def test2Class = registry.loadClass('test.T2')
 
         def dao1 = registry.dao.find { it.getTableName() == 'T1' }
         def dao2 = registry.dao.find { it.getTableName() == 'T2' }
@@ -825,7 +828,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def registry = generateRegistry([t1])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         assert database.version == 1
 
@@ -891,7 +894,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def registry = generateRegistry([t1])
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         assert database.version == 1
 
@@ -935,7 +938,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
-        def testClass = registry.class.classLoader.loadClass('test.T')
+        def testClass = registry.loadClass('test.T')
 
         def entity = testClass.newInstance()
         try {
