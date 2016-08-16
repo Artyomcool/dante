@@ -23,6 +23,7 @@
 package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Entity;
+import com.github.artyomcool.dante.annotation.Migration;
 import com.github.artyomcool.dante.annotation.Queries;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -32,11 +33,20 @@ import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.TypeElement;
 import java.io.IOException;
+import java.lang.annotation.Annotation;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_7)
 @SupportedAnnotationTypes("com.github.artyomcool.dante.annotation.*")
 public class AnnotationProcessor extends AbstractProcessor {
+
+    private static final List<Class<? extends Annotation>> SUPPORTED_ANNOTATIONS = Arrays.asList(
+            Entity.class,
+            Queries.class,
+            Migration.class
+    );
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
@@ -45,8 +55,7 @@ public class AnnotationProcessor extends AbstractProcessor {
             return false;
         }
 
-        if (roundEnv.getElementsAnnotatedWith(Entity.class).isEmpty()
-                && roundEnv.getElementsAnnotatedWith(Queries.class).isEmpty()) {
+        if (!hasElements(roundEnv)) {
             return false;
         }
 
@@ -57,6 +66,15 @@ public class AnnotationProcessor extends AbstractProcessor {
         }
 
         return true;
+    }
+
+    private boolean hasElements(RoundEnvironment roundEnv) {
+        for (Class<? extends Annotation> c : SUPPORTED_ANNOTATIONS) {
+            if (!roundEnv.getElementsAnnotatedWith(c).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
 

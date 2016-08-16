@@ -915,6 +915,90 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void upgradeCustomMigration() {
+        def t1 = [
+                fullClassName: "test.T",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def t2 = [
+                fullClassName: "test.T",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    @SinceVersion(value = 2)
+                    long newField;
+
+                }
+            """
+        ]
+
+        def migration = [
+                fullClassName: "test.M",
+                sourceFile   : """
+                package test;
+
+                import android.database.sqlite.*;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Migration
+                public class M {
+
+                    private static int dbVersion = -1;
+
+                    @Migration.OnVersion(2)
+                    public void initWithCount(SQLiteDatabase db) {
+                        dbVersion = db.getVersion();
+                    }
+
+                }
+            """
+        ]
+
+        def registry = generateRegistry([t1])
+        DaoMaster master = new DaoMaster({database}, registry)
+        master.init()
+        def testClass = registry.loadClass('test.T')
+
+        assert database.version == 1
+
+        def e1 = testClass.newInstance()
+        registry.dao[0].insert(e1)
+        assert e1.id
+
+        registry = generateRegistry([t2, migration])
+        master = new DaoMaster({database}, registry)
+        master.init()
+        assert database.version == 2
+
+        assert registry.loadClass('test.M').dbVersion == 1
+
+        def e2 = registry.dao[0].selectUnique('')
+        assert e2.id == e1.id
+        assert e2.newField == 0
+    }
+
+    @Test
     void notNullString() {
         DaoRegistry registry = generateRegistry([[
             fullClassName: "test.T",

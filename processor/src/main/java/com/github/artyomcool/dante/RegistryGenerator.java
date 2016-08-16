@@ -23,9 +23,11 @@
 package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Entity;
+import com.github.artyomcool.dante.annotation.Migration;
 import com.github.artyomcool.dante.annotation.Queries;
 import com.github.artyomcool.dante.core.dao.DaoRegistry;
 import com.github.artyomcool.dante.core.dao.EntityInfo;
+import com.github.artyomcool.dante.core.dao.MigrationInfo;
 import com.squareup.javapoet.*;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -35,10 +37,7 @@ import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class RegistryGenerator {
 
@@ -59,28 +58,36 @@ public class RegistryGenerator {
         try {
             Map<String, GeneratedDao> generatedEntities = new HashMap<>();
             List<GeneratedQuery> generatedQueries = new ArrayList<>();
+            List<ClassName> generatedMigrations = new ArrayList<>();
 
             roundEnvironment.getElementsAnnotatedWith(Entity.class).forEach(e -> {
-                        try {
-                            DaoGenerator generator = new DaoGenerator(this, e);
-                            GeneratedDao generated = generator.generate();
-                            generatedEntities.put(generated.getQualifiedName(), generated);
-                        } catch (IOException exception) {
-                            throw new UncheckedIOException(exception);
-                        }
-                    }
-            );
+                try {
+                    DaoGenerator generator = new DaoGenerator(this, e);
+                    GeneratedDao generated = generator.generate();
+                    generatedEntities.put(generated.getQualifiedName(), generated);
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+            });
             roundEnvironment.getElementsAnnotatedWith(Queries.class).forEach(e -> {
-                        try {
-                            QueriesGenerator generator = new QueriesGenerator(this, e, generatedEntities);
-                            generatedQueries.add(generator.generate());
-                        } catch (IOException ex) {
-                            throw new UncheckedIOException(ex);
-                        }
-                    }
-            );
-            MethodSpec.Builder builder = MethodSpec.methodBuilder("initDao")
+                try {
+                    QueriesGenerator generator = new QueriesGenerator(this, e, generatedEntities);
+                    generatedQueries.add(generator.generate());
+                } catch (IOException ex) {
+                    throw new UncheckedIOException(ex);
+                }
+            });
+            roundEnvironment.getElementsAnnotatedWith(Migration.class).forEach(e -> {
+                try {
+                    MigrationGenerator generator = new MigrationGenerator(this, (TypeElement) e);
+                    generatedMigrations.add(generator.generate());
+                } catch (IOException ex) {
+                    throw new UncheckedIOException(ex);
+                }
+            });
+            MethodSpec.Builder initDaoBuilder = MethodSpec.methodBuilder("initDao")
                     .addModifiers(Modifier.PROTECTED)
+                    .addAnnotation(Override.class)
                     .returns(ParameterizedTypeName.get(ClassName.get(List.class), ParameterizedTypeName.get(ClassName.get(EntityInfo.class), WildcardTypeName.subtypeOf(Object.class))))
                     .addParameter(sqliteDatabase(), "db")
                     .addStatement("$T<$T<?>> result = new $T<$T<?>>()", List.class, EntityInfo.class, ArrayList.class, EntityInfo.class);
@@ -90,7 +97,7 @@ public class RegistryGenerator {
                         .add("{\n")
                         .indent()
                         .addStatement("$T dao = new $T(db)", e.getDao(), e.getDao())
-                        .add("result.add(new $T<$T>($T.class, dao)", EntityInfo.class, e.getEntity(), e.getEntity());
+                        .add("result.add(\n$>new $T<$T>($T.class, dao)", EntityInfo.class, e.getEntity(), e.getEntity());
 
                 codeBuilder.indent().indent();
                 generatedQueries.stream()
@@ -99,16 +106,37 @@ public class RegistryGenerator {
                 codeBuilder.unindent().unindent().add("\n");
 
                 CodeBlock block = codeBuilder
-                        .add(");\n")
+                        .add("$<);\n")
                         .unindent()
                         .add("}\n")
                         .build();
 
-                builder.addCode(block);
+                initDaoBuilder.addCode(block);
             });
 
-            builder
+            initDaoBuilder
                     .addStatement("return result");
+
+            MethodSpec.Builder initCustomMigrations = MethodSpec.methodBuilder("initCustomMigrations")
+                    .addModifiers(Modifier.PROTECTED)
+                    .addAnnotation(Override.class)
+                    .returns(ParameterizedTypeName.get(ClassName.get(List.class), ClassName.get(MigrationInfo.class)));
+
+            boolean hasMigrations = !generatedMigrations.isEmpty();
+
+            if (hasMigrations) {
+                CodeBlock.Builder builder = CodeBlock.builder();
+                for (int i = 0; i < generatedMigrations.size() - 1; i++) {
+                    builder.add("new $T(),\n", generatedMigrations.get(i));
+                }
+                builder.add("new $T()", generatedMigrations.get(generatedMigrations.size() - 1));
+                CodeBlock code = builder.build();
+
+                initCustomMigrations.addStatement("return $T.asList($>\n$L$<\n)", Arrays.class, code);
+            } else {
+                initCustomMigrations.addStatement("return $T.emptyList()", Collections.class);
+            }
+
 
             TypeSpec.Builder registryBuilder = TypeSpec.classBuilder("DefaultRegistry")
                     .superclass(DaoRegistry.class)
@@ -121,7 +149,8 @@ public class RegistryGenerator {
                 );
             }
             TypeSpec spec = registryBuilder
-                    .addMethod(builder.build())
+                    .addMethod(initDaoBuilder.build())
+                    .addMethod(initCustomMigrations.build())
                     .build();
 
 
@@ -190,21 +219,6 @@ public class RegistryGenerator {
         } catch (UnsupportedOperationException e) {
             return typeName;
         }
-    }
-
-    public static String capitalize(String text) {
-        if (text.isEmpty()) {
-            return "";
-        }
-        return Character.toTitleCase(text.charAt(0)) + text.substring(1);
-    }
-
-    public static CodeBlock noCode() {
-        return CodeBlock.builder().build();
-    }
-
-    public static CodeBlock statement(String code, Object... params) {
-        return CodeBlock.builder().addStatement(code, params).build();
     }
 
     private static PackageElement getPackageElement(Element type) {
