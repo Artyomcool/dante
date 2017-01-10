@@ -35,6 +35,7 @@ import org.junit.runner.RunWith
 import org.powermock.tests.utils.impl.AptRunner
 
 import java.sql.SQLException
+import java.util.concurrent.Callable
 
 @SuppressWarnings(["GroovyAssignabilityCheck", "GroovyAccessibility"])
 @RunWith(AptRunner)
@@ -1176,6 +1177,154 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         Cursor cursor = database.rawQuery("PRAGMA index_info('CUSTOM_TEXT')", null)
         assert cursor.moveToNext()
+    }
+
+    @Test
+    void runInTxSuccess() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster({ database }, registry)
+        master.init()
+
+        def testClass = registry.loadClass('test.T')
+        def dao = master.dao(testClass)
+        dao.runInTx(new Runnable() {
+            @Override
+            void run() {
+                dao.insert(testClass.newInstance())
+            }
+        })
+
+        assert dao.selectUnique('') != null
+    }
+
+    @Test
+    void runInTxFail() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster({ database }, registry)
+        master.init()
+
+        def testClass = registry.loadClass('test.T')
+        def dao = master.dao(testClass)
+        try {
+            dao.runInTx(new Runnable() {
+                @Override
+                void run() {
+                    dao.insert(testClass.newInstance())
+                    throw new RuntimeException("Expected")
+                }
+            })
+        } catch (RuntimeException e) {
+            assert e.message == "Expected"
+        }
+
+        assert dao.selectUnique('') == null
+    }
+
+    @Test
+    void callInTxSuccess() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster({ database }, registry)
+        master.init()
+
+        def testClass = registry.loadClass('test.T')
+        def dao = master.dao(testClass)
+        def result = dao.callInTx(new Callable() {
+            @Override
+            Object call() throws Exception {
+                dao.insert(testClass.newInstance())
+                return 'result'
+            }
+        })
+
+        assert result == 'result'
+        assert dao.selectUnique('') != null
+    }
+
+    @Test
+    void callInTxFail() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster({ database }, registry)
+        master.init()
+
+        def testClass = registry.loadClass('test.T')
+        def dao = master.dao(testClass)
+        try {
+            dao.callInTx(new Callable() {
+                @Override
+                Object call() throws Exception {
+                    dao.insert(testClass.newInstance())
+                    throw new RuntimeException("Expected")
+                }
+            })
+        } catch (RuntimeException e) {
+            assert e.message == "Expected"
+        }
+
+        assert dao.selectUnique('') == null
     }
 
 }

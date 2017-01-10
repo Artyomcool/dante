@@ -47,6 +47,9 @@ class SqlHelper {
 
         def dbVersion = 0;
 
+        def savedAutoCommit = true
+        def transactionSuccess = false
+
         return [
                 rawQuery        : { String where, String[] params ->
                     CachedRowSetImpl resultSet = new CachedRowSetImpl()
@@ -325,9 +328,21 @@ class SqlHelper {
                 setVersion: {
                     dbVersion = it
                 },
-                beginTransaction: {},
-                setTransactionSuccessful: {},
-                endTransaction: {}
+                beginTransaction: {
+                    savedAutoCommit = sql.getConnection().getAutoCommit()
+                    sql.getConnection().setAutoCommit(false)
+                },
+                setTransactionSuccessful: {
+                    transactionSuccess = true
+                },
+                endTransaction: {
+                    if (transactionSuccess) {
+                        sql.getConnection().commit()
+                    } else {
+                        sql.getConnection().rollback()
+                    }
+                    sql.getConnection().setAutoCommit(savedAutoCommit)
+                }
         ] as SQLiteDatabase
     }
 

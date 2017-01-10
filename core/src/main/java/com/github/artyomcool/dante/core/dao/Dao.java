@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.Callable;
 
 /**
  * Base class for all DAO. In most cases should be accessed through {@link DaoMaster#dao(Class)} with entity class.
@@ -243,6 +244,28 @@ public abstract class Dao<E> {
     public void clear() {
         db.execSQL("DELETE FROM '" + getTableName() + "'");
         clearCache();
+    }
+
+    public void runInTx(Runnable runnable) {
+        db.beginTransaction();
+        try {
+            runnable.run();
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
+    }
+
+    public <T> T callInTx(Callable<T> callable) throws Exception {
+        db.beginTransaction();
+        try {
+            T result = callable.call();
+
+            db.setTransactionSuccessful();
+            return result;
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private SQLiteStatement ensureInsertQuery() {
