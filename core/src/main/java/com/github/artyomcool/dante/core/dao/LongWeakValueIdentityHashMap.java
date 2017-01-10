@@ -28,6 +28,7 @@ import javax.annotation.Nullable;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
+import java.util.Arrays;
 
 @NotThreadSafe
 public class LongWeakValueIdentityHashMap<T> {
@@ -113,6 +114,11 @@ public class LongWeakValueIdentityHashMap<T> {
             e = e.next;
         }
         return null;
+    }
+
+    public void removeAll() {
+        Arrays.fill(table, null);
+        count = 0;
     }
 
     private void remove(WeakEntity entity) {

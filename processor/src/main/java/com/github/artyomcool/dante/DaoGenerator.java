@@ -155,7 +155,8 @@ public class DaoGenerator {
                 .addMethod(genUpdateRowId())
                 .addMethod(genGetFromCache())
                 .addMethod(genPutIntoCache())
-                .addMethod(genRemoveFromCache());
+                .addMethod(genRemoveFromCache())
+                .addMethod(genClearCache());
 
         TypeSpec typeSpec = daoClass.build();
         JavaFile file = JavaFile.builder(getPackage(entity), typeSpec)
@@ -528,6 +529,14 @@ public class DaoGenerator {
                 .addParameter(entityTypeName, "entity");
 
         methodBuilder.addStatement("cache.remove(entity.$L)", idField.getSimpleName());
+
+        return methodBuilder.build();
+    }
+
+    private MethodSpec genClearCache() {
+        MethodSpec.Builder methodBuilder = implement(PROTECTED, "clearCache");
+
+        methodBuilder.addStatement("cache.removeAll()");
 
         return methodBuilder.build();
     }

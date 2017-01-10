@@ -33,6 +33,10 @@ public class ObjectWeakValueIdentityHashMap<K, T> {
         return unwrap(old);
     }
 
+    public void removeAll() {
+        backingMap.clear();
+    }
+
     @Nullable
     private T unwrap(@Nullable WeakReference<T> reference) {
         return reference == null ? null : reference.get();

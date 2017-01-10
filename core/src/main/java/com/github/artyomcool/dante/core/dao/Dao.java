@@ -89,6 +89,8 @@ public abstract class Dao<E> {
 
     protected abstract void removeFromCache(E entity);
 
+    protected abstract void clearCache();
+
     /**
      * Returns DB version in which this field where presented. Used for automatic migration.
      * @return DB version since field exists
@@ -236,6 +238,11 @@ public abstract class Dao<E> {
         bindId(entity, sqLiteStatement, 1);
         sqLiteStatement.execute();
         removeFromCache(entity);
+    }
+
+    public void clear() {
+        db.execSQL("DELETE FROM '" + getTableName() + "'");
+        clearCache();
     }
 
     private SQLiteStatement ensureInsertQuery() {
