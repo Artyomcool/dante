@@ -222,27 +222,30 @@ public class QueriesGenerator {
         Types types = generator.getProcessingEnv().getTypeUtils();
         Elements elements = generator.getProcessingEnv().getElementUtils();
 
-        TypeMirror observableMirror = elements.getTypeElement(Observable.class.getName()).asType();
+        TypeElement typeElement = elements.getTypeElement(Observable.class.getName());
+        if (typeElement != null) {
+            TypeMirror observableMirror = typeElement.asType();
 
-        if (types.isAssignable(types.erasure(returnType), observableMirror)) {
-            TypeMirror internalReturnType = ((DeclaredType) returnType).getTypeArguments().get(0);
-            TypeName callableType = ParameterizedTypeName.get(
-                    ClassName.get(Callable.class),
-                    ClassName.get(internalReturnType)
-            );
-            TypeSpec callable = TypeSpec.anonymousClassBuilder("")
-                    .superclass(callableType)
-                    .addMethod(
-                            MethodSpec.methodBuilder("call")
-                                    .addAnnotation(Override.class)
-                                    .addModifiers(Modifier.PUBLIC)
-                                    .returns(ClassName.get(internalReturnType))
-                                    .addCode(queryReturn(internalReturnType))
-                            .build()
-                    )
-                    .build();
-            builder.addStatement("return $T.fromCallable($L)", Observable.class, callable);
-            return builder.build();
+            if (types.isAssignable(types.erasure(returnType), observableMirror)) {
+                TypeMirror internalReturnType = ((DeclaredType) returnType).getTypeArguments().get(0);
+                TypeName callableType = ParameterizedTypeName.get(
+                        ClassName.get(Callable.class),
+                        ClassName.get(internalReturnType)
+                );
+                TypeSpec callable = TypeSpec.anonymousClassBuilder("")
+                        .superclass(callableType)
+                        .addMethod(
+                                MethodSpec.methodBuilder("call")
+                                        .addAnnotation(Override.class)
+                                        .addModifiers(Modifier.PUBLIC)
+                                        .returns(ClassName.get(internalReturnType))
+                                        .addCode(queryReturn(internalReturnType))
+                                        .build()
+                        )
+                        .build();
+                builder.addStatement("return $T.fromCallable($L)", Observable.class, callable);
+                return builder.build();
+            }
         }
 
         TypeMirror iterableMirror = elements.getTypeElement(Iterable.class.getName()).asType();
