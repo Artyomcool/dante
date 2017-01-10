@@ -109,6 +109,14 @@ public class DaoMaster implements Registry {
                             }
                         });
                     }
+                    if (property.getIndexedSince() == version) {
+                        result.add(new Migration() {
+                            @Override
+                            public void migrate() {
+                                dao.ensureIndex(property, version);
+                            }
+                        });
+                    }
                 }
             }
         }

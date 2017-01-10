@@ -293,10 +293,12 @@ public abstract class Dao<E> {
 
     public void createTable() {
         db.execSQL(createTable(false, Integer.MAX_VALUE));
+        ensureIndexes(Integer.MAX_VALUE);
     }
 
     public void ensureTable(int version) {
         db.execSQL(createTable(true, version));
+        ensureIndexes(version);
     }
 
     public void ensureProperty(Property property, int version) {
@@ -304,6 +306,21 @@ public abstract class Dao<E> {
         db.execSQL("ALTER TABLE '" + getTableName() + "' " +
                 "ADD COLUMN " + property.getColumnName() + " " + property.getColumnType() +
                 " " + property.getColumnExtraDefinition() + defaultValue);
+    }
+
+    private void ensureIndexes(int version) {
+        for (Property property : getProperties()) {
+            int indexedSince = property.getIndexedSince();
+            if (indexedSince == Property.NO_INDEX || indexedSince > version) {
+                continue;
+            }
+            ensureIndex(property, version);
+        }
+    }
+
+    public void ensureIndex(Property property, int version) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS " + property.getIndexName() + " ON " +
+                getTableName() + " (" + property.getColumnName() + ")" );
     }
 
     private String createTable(boolean ifNotExists, int version) {
@@ -357,4 +374,5 @@ public abstract class Dao<E> {
         tmp.setLength(0);
         return result;
     }
+
 }

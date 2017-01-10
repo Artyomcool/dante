@@ -71,6 +71,7 @@ public abstract class DaoRegistry implements Registry {
             version = Math.max(dao.getSinceVersion(), version);
             for (Property property : dao.getProperties()) {
                 version = Math.max(property.getSinceVersion(), version);
+                version = Math.max(property.getIndexedSince(), version);
             }
         }
         return version;

@@ -24,11 +24,15 @@ package com.github.artyomcool.dante.core;
 
 public final class Property {
 
+    public static final int NO_INDEX = -1;
+
     private final int sinceVersion;
     private final String columnName;
     private final String columnType;
     private final String columnExtraDefinition;
     private final String defaultValue;
+    private final int indexedSince;
+    private final String indexName;
 
     private Property(Builder builder) {
         this.sinceVersion = builder.sinceVersion;
@@ -36,6 +40,8 @@ public final class Property {
         this.columnType = builder.columnType;
         this.columnExtraDefinition = builder.columnExtraDefinition;
         this.defaultValue = builder.defaultValue;
+        this.indexedSince = builder.indexedSince;
+        this.indexName = builder.indexName;
     }
 
     public int getSinceVersion() {
@@ -58,12 +64,22 @@ public final class Property {
         return defaultValue;
     }
 
+    public int getIndexedSince() {
+        return indexedSince;
+    }
+
+    public String getIndexName() {
+        return indexName;
+    }
+
     public static class Builder {
         private int sinceVersion = 1;
         private String columnName;
         private String columnType;
         private String columnExtraDefinition = "";
         private String defaultValue;
+        private int indexedSince = NO_INDEX;
+        private String indexName;
 
         public Builder sinceVersion(int sinceVersion) {
             this.sinceVersion = sinceVersion;
@@ -87,6 +103,12 @@ public final class Property {
 
         public Builder defaultValue(String defaultValue) {
             this.defaultValue = defaultValue;
+            return this;
+        }
+
+        public Builder index(int sinceVersion, String indexName) {
+            this.indexedSince = sinceVersion;
+            this.indexName = indexName;
             return this;
         }
 

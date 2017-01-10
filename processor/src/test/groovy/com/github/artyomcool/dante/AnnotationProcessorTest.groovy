@@ -1036,4 +1036,115 @@ class AnnotationProcessorTest extends AbstractAptTest {
         registry.dao[0].insert(entity)
     }
 
+    @Test
+    void simpleIndex() {
+        DaoRegistry registry = generateRegistry([[
+                                                         fullClassName: "test.T",
+                                                         sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    @Index
+                    String text;
+
+                }
+            """
+                                                 ]])
+
+        DaoMaster master = new DaoMaster({ database }, registry)
+        master.init()
+
+        Cursor cursor = database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
+        assert cursor.moveToNext()
+    }
+
+    @Test
+    void indexSince() {
+        DaoRegistry t1 = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    String text;
+
+                }
+            """
+        ]])
+        DaoRegistry t2 = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    @Index(sinceVersion = 2)
+                    String text;
+
+                }
+            """
+        ]])
+
+        new DaoMaster({ database }, t1).init()
+
+        try {
+            database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
+            throw new IllegalStateException('Should be aborted due to no results')
+        } catch (SQLException e) {
+            //expected
+        }
+
+        new DaoMaster({ database }, t2).init()
+        database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
+    }
+
+    @Test
+    void customIndexName() {
+        DaoRegistry registry = generateRegistry([[
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    @Index(name = "CUSTOM_TEXT")
+                    String text;
+
+                }
+            """
+        ]])
+
+        DaoMaster master = new DaoMaster({ database }, registry)
+        master.init()
+
+        Cursor cursor = database.rawQuery("PRAGMA index_info('CUSTOM_TEXT')", null)
+        assert cursor.moveToNext()
+    }
+
 }

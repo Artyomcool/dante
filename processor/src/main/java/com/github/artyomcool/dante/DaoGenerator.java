@@ -24,6 +24,7 @@ package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
+import com.github.artyomcool.dante.annotation.Index;
 import com.github.artyomcool.dante.annotation.SinceVersion;
 import com.github.artyomcool.dante.core.Property;
 import com.github.artyomcool.dante.core.dao.LongWeakValueIdentityHashMap;
@@ -232,6 +233,7 @@ public class DaoGenerator {
                 .add("\n.columnType($S)", columnType(field))
                 .add("\n.columnExtraDefinition($S)", extraDefinition(field))
                 .add("\n.defaultValue($S)", defaultValue(field))
+                .add("\n.index($L, $S)", indexSince(field), indexName(field))
                 .add("\n.build()").unindent().unindent()
                 .build();
     }
@@ -294,6 +296,26 @@ public class DaoGenerator {
             return "0";
         }
         return isNullable(field) ? "NULL" : "''";
+    }
+
+    private int indexSince(VariableElement field) {
+        Index index = field.getAnnotation(Index.class);
+        if (index == null) {
+            return Property.NO_INDEX;
+        }
+        return index.sinceVersion();
+    }
+
+    private String indexName(VariableElement field) {
+        Index index = field.getAnnotation(Index.class);
+        if (index == null) {
+            return "";
+        }
+        String indexName = index.name();
+        if (indexName.isEmpty()) {
+            return "IDX_" + columnName(field);
+        }
+        return indexName;
     }
 
     private Optional<String> getSinceDefault(VariableElement field) {

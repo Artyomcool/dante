@@ -50,6 +50,7 @@ class SqlHelper {
         return [
                 rawQuery        : { String where, String[] params ->
                     CachedRowSetImpl resultSet = new CachedRowSetImpl()
+                    if (params == null) params = []
                     sql.query(where, params as List<String>) {
                         resultSet.populate(it)
                     }
