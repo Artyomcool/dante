@@ -43,7 +43,9 @@ public class ObjectWeakValueIdentityHashMap<K, T> {
         while ((cleared = referenceQueue.poll()) != null) {
             @SuppressWarnings("unchecked")
             K id = ((WeakEntity<K, T>) cleared).id;
-            remove(id);
+            if (backingMap.get(id) == cleared) {
+                backingMap.remove(id);
+            }
         }
     }
 

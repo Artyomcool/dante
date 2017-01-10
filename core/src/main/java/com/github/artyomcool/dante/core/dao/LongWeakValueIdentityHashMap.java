@@ -115,16 +115,36 @@ public class LongWeakValueIdentityHashMap<T> {
         return null;
     }
 
+    private void remove(WeakEntity entity) {
+        int index = index(entity.id);
+        @SuppressWarnings("unchecked")
+        WeakEntity<T> e = table[index];
+        WeakEntity prev = null;
+        while (e != null) {
+            if (e == entity) {
+                if (prev == null) {
+                    table[index] = null;
+                } else {
+                    prev.next = e.next;
+                }
+                count--;
+                return;
+            }
+            prev = e;
+            e = e.next;
+        }
+    }
+
     private void checkReferenceQueue() {
         Reference<? extends T> cleared;
         while ((cleared = referenceQueue.poll()) != null) {
-            long id = ((WeakEntity) cleared).id;
-            remove(id);
+            WeakEntity weakEntity = (WeakEntity) cleared;
+            remove(weakEntity);
         }
     }
 
     private void reallocateIfNeed() {
-        if (table.length < count * 3 / 4) {
+        if (count < table.length * 3 / 4) {
             return;
         }
         WeakEntity[] newTable = new WeakEntity[table.length * 2];
