@@ -210,6 +210,7 @@ public abstract class Dao<E> {
 
     private void executeUpdate(E element, SQLiteStatement updateStatement) {
         bind(element, updateStatement);
+        bindId(element, updateStatement, getProperties().size() + 1);
         updateStatement.execute();
     }
 

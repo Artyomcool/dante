@@ -46,8 +46,18 @@ class AnnotationProcessorTest extends AbstractAptTest {
     @Before
     void init() {
         database = SqlHelper.createInMemory()
-        DaoRegistry.metaClass.loadClass = { def name ->
-            return delegate.class.classLoader.loadClass(name)
+        DaoMaster.metaClass.loadClass = { def name ->
+            delegate.delegate.class.classLoader.loadClass(name)
+        }
+        DaoMaster.metaClass.dao = { def name ->
+            def result = dao(loadClass(name))
+            result.class.metaClass.newInstance = {
+                loadClass(name).newInstance()
+            }
+            result
+        }
+        DaoMaster.metaClass.queries = { def name ->
+            queries(loadClass(name))
         }
     }
 
@@ -154,6 +164,98 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void insert() {
+        def dao = simplestDao()
+
+        dao.insert(dao.newInstance())
+
+        assert dao.selectUnique('') != null
+    }
+
+    @Test
+    void insertBatch() {
+        def dao = simplestDao()
+
+        dao.insert(Arrays.asList(dao.newInstance(), dao.newInstance()))
+
+        assert dao.selectList('').size() == 2
+        assert dao.selectList('').collect {it.id} == [1, 2]
+    }
+
+    @Test
+    void update() {
+        def t = [
+                fullClassName: "test.T",
+                sourceFile: """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    String text;
+
+                }
+            """
+        ]
+
+        def daoT = dao(generateRegistry([t]))
+
+        def e = daoT.newInstance()
+        e.text = '1'
+        daoT.insert(e)
+        e.text = '2'
+        daoT.update(e)
+        e.text = '3'
+
+        daoT = dao(generateRegistry([t]))
+
+        assert daoT.selectUnique('').text == '2'
+    }
+
+    @Test
+    void updateBatch() {
+        def t = [
+                fullClassName: "test.T",
+                sourceFile: """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+
+                    String text;
+
+                }
+            """
+        ]
+
+        def daoT = dao(generateRegistry([t]))
+
+        def e = [daoT.newInstance(), daoT.newInstance()]
+        e[0].text = '01'
+        e[1].text = '11'
+        daoT.insert(e)
+        e[0].text = '02'
+        e[1].text = '12'
+        daoT.update(e)
+        e[0].text = '03'
+        e[1].text = '13'
+
+        daoT = dao(generateRegistry([t]))
+
+        assert daoT.selectList('').collect({it.text}) == ['02', '12']
+    }
+
+    @Test
     void simpleQuery() {
         DaoRegistry registry = generateRegistry([[
              fullClassName: "test.T",
@@ -190,7 +292,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
+        def testQueryClass = master.loadClass('test.T$TestQuery')
         def queries = registry.queries(testQueryClass)
         assert testQueryClass.isAssignableFrom(queries.class)
     }
@@ -230,8 +332,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
         DaoMaster master = new DaoMaster({database}, registry)
         master.init()
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
+        def testQueryClass = master.loadClass('test.T$TestQuery')
+        def queries = master.queries('test.T$TestQuery')
         assert testQueryClass.isAssignableFrom(queries.class)
     }
 
@@ -262,22 +364,18 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
+        DaoMaster master = master(registry)
 
-        def testClass = registry.loadClass('test.T');
+        def queries = master.queries('test.T$TestQuery')
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
-
-        def dao = registry.dao[0]
-        def e = testClass.newInstance()
+        def dao = master.dao('test.T')
+        def e = dao.newInstance()
         e.id = 1
         dao.insert(e)
 
         assert queries.byId(7) == null
 
-        e = testClass.newInstance()
+        e = dao.newInstance()
         e.id = 7
         dao.insert(e)
 
@@ -312,25 +410,21 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
+        DaoMaster master = master(registry)
 
-        def testClass = registry.loadClass('test.T')
-
-        def dao = registry.dao[0]
+        def dao = master.dao('test.T')
 
         def inserted = []
 
         (1..10).each {
-            def e = testClass.newInstance()
+            def e = dao.newInstance()
             e.id = it
             e.text = "text $it"
             dao.insert(e)
             inserted << e
         }
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
+        def queries = master.queries('test.T$TestQuery')
         List result = queries.byTextWithLimit('text %', 7)
 
         assert result == inserted[0..6]
@@ -364,24 +458,21 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        DaoMaster master = master(registry)
 
-        def dao = registry.dao[0]
+        def dao = master.dao('test.T')
 
         def inserted = []
 
         (1..10).each {
-            def e = testClass.newInstance()
+            def e = dao.newInstance()
             e.id = it
             e.value = it * 10
             dao.insert(e)
             inserted << e
         }
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
+        def queries = master.queries('test.T$TestQuery')
         List result = queries.greaterThenSum(10, 20)
 
         assert result.size() == 7
@@ -417,24 +508,21 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
          ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        DaoMaster master = master(registry)
 
-        def dao = registry.dao[0]
+        def dao = master.dao('test.T')
 
         def inserted = []
 
         (1..10).each {
-            def e = testClass.newInstance()
+            def e = dao.newInstance()
             e.id = it
             e.value = it
             dao.insert(e)
             inserted << e
         }
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
+        def queries = master.queries('test.T$TestQuery')
         (0..5).each {
             List result = queries.greaterThenAPlusField(5)
             assert result.size() == (5 - it)
@@ -469,15 +557,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        DaoMaster master = master(registry)
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
+        def queries = master.queries('test.T$TestQuery')
 
-        def dao = registry.dao[0]
-        def e = testClass.newInstance()
+        def dao = master.dao('test.T')
+        def e = dao.newInstance()
         e.id = 1
         dao.insert(e)
 
@@ -514,15 +599,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        DaoMaster master = master(registry)
 
-        def testQueryClass = registry.loadClass('test.T$TestQuery')
-        def queries = registry.queries(testQueryClass)
+        def queries = master.queries('test.T$TestQuery')
 
-        def dao = registry.dao[0]
-        def e = testClass.newInstance()
+        def dao = master.dao('test.T')
+        def e = dao.newInstance()
         e.id = 'str'
         dao.insert(e)
 
@@ -534,27 +616,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void delete() {
-        DaoRegistry registry = generateRegistry([[
-            fullClassName: "test.T",
-            sourceFile: """
-                package test;
-
-                import com.github.artyomcool.dante.annotation.*;
-
-                @Entity
-                public class T {
-                    @Id
-                    Long id;
-                }
-            """
-        ]])
-
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
-
-        def dao = registry.dao[0]
-        def e = testClass.newInstance()
+        def dao = simplestDao()
+        def e = dao.newInstance()
         e.id = 7
 
         dao.insert(e)
@@ -565,27 +628,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void clear() {
-        DaoRegistry registry = generateRegistry([[
-            fullClassName: "test.T",
-            sourceFile: """
-                package test;
-
-                import com.github.artyomcool.dante.annotation.*;
-
-                @Entity
-                public class T {
-                    @Id
-                    Long id;
-                }
-            """
-        ]])
-
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
-
-        def dao = registry.dao[0]
-        def e = testClass.newInstance()
+        def dao = simplestDao()
+        def e = dao.newInstance()
         e.id = 7
 
         dao.insert(e)
@@ -636,10 +680,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
 
-        def dao = registry.dao[0]
+        def dao = dao(registry)
         assert dao.getSinceVersion() == 100
     }
 
@@ -685,10 +727,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
 
-        def dao = registry.dao[0]
+        def dao = dao(registry)
         assert dao.getSinceVersion() == 100
     }
 
@@ -729,16 +769,11 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
+        def dao = dao(registry)
 
-        def testClass = registry.loadClass('test.T')
+        dao.insert(dao.newInstance())
 
-        def dao = registry.dao[0]
-
-        dao.insert(testClass.newInstance())
-
-        def t1 = testClass.newInstance()
+        def t1 = dao.newInstance()
         t1.integer2 = 7
         dao.insert(t1)
 
@@ -792,26 +827,21 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]
 
         def registry = generateRegistry([t1])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
+        DaoMaster daoMaster = master(registry)
 
         assert database.version == 1
 
         registry = generateRegistry([t1, t2])
-        master = new DaoMaster({database}, registry)
-        master.init()
+        daoMaster = master(registry)
         assert database.version == 2
 
-        def test1Class = registry.loadClass('test.T1')
-        def test2Class = registry.loadClass('test.T2')
+        def dao1 = daoMaster.dao('test.T1')
+        def dao2 = daoMaster.dao('test.T2')
 
-        def dao1 = registry.dao.find { it.getTableName() == 'T1' }
-        def dao2 = registry.dao.find { it.getTableName() == 'T2' }
-
-        def e1 = test1Class.newInstance()
+        def e1 = dao1.newInstance()
         dao1.insert(e1)
 
-        def e2 = test2Class.newInstance()
+        def e2 = dao2.newInstance()
         dao2.insert(e2)
 
         assert dao1.selectUnique('') == e1
@@ -858,22 +888,19 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]
 
         def registry = generateRegistry([t1])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        def daoT = dao(registry)
 
         assert database.version == 1
 
-        def e1 = testClass.newInstance()
-        registry.dao[0].insert(e1)
+        def e1 = daoT.newInstance()
+        daoT.insert(e1)
         assert e1.id
 
         registry = generateRegistry([t2])
-        master = new DaoMaster({database}, registry)
-        master.init()
+        daoT = dao(registry)
         assert database.version == 2
 
-        def e2 = registry.dao[0].selectUnique('')
+        def e2 = daoT.selectUnique('')
         assert e2.id == e1.id
         assert !e2.newField
     }
@@ -924,22 +951,19 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]
 
         def registry = generateRegistry([t1])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        def daoT = dao(registry)
 
         assert database.version == 1
 
-        def e1 = testClass.newInstance()
-        registry.dao[0].insert(e1)
+        def e1 = daoT.newInstance()
+        daoT.insert(e1)
         assert e1.id
 
         registry = generateRegistry([t2])
-        master = new DaoMaster({database}, registry)
-        master.init()
+        daoT = dao(registry)
         assert database.version == 2
 
-        def e2 = registry.dao[0].selectUnique('')
+        def e2 = daoT.selectUnique('')
         assert e2.id == e1.id
         assert e2.newField == 0
         assert e2.newField2 == 0
@@ -1008,24 +1032,21 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]
 
         def registry = generateRegistry([t1])
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        def dao = dao(registry)
 
         assert database.version == 1
 
-        def e1 = testClass.newInstance()
-        registry.dao[0].insert(e1)
+        def e1 = dao.newInstance()
+        dao.insert(e1)
         assert e1.id
 
         registry = generateRegistry([t2, migration])
-        master = new DaoMaster({database}, registry)
-        master.init()
+        def daoMaster = master(registry)
         assert database.version == 2
 
-        assert registry.loadClass('test.M').dbVersion == 1
+        assert daoMaster.loadClass('test.M').dbVersion == 1
 
-        def e2 = registry.dao[0].selectUnique('')
+        def e2 = daoMaster.dao('test.T').selectUnique('')
         assert e2.id == e1.id
         assert e2.newField == 0
     }
@@ -1052,27 +1073,25 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        DaoMaster master = new DaoMaster({database}, registry)
-        master.init()
-        def testClass = registry.loadClass('test.T')
+        Dao dao = dao(registry)
 
-        def entity = testClass.newInstance()
+        def entity = dao.newInstance()
         try {
-            registry.dao[0].insert(entity)
+            dao.insert(entity)
             throw new IllegalStateException('Should be aborted due to constraint violation')
         } catch (SQLException ignored) {
             //expected
         }
 
         entity.text = 'test'
-        registry.dao[0].insert(entity)
+        dao.insert(entity)
     }
 
     @Test
     void simpleIndex() {
         DaoRegistry registry = generateRegistry([[
-                                                         fullClassName: "test.T",
-                                                         sourceFile   : """
+            fullClassName: "test.T",
+            sourceFile   : """
                 package test;
 
                 import com.github.artyomcool.dante.annotation.*;
@@ -1088,10 +1107,9 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                 }
             """
-                                                 ]])
+        ]])
 
-        DaoMaster master = new DaoMaster({ database }, registry)
-        master.init()
+        master(registry)
 
         Cursor cursor = database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
         assert cursor.moveToNext()
@@ -1137,7 +1155,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        new DaoMaster({ database }, t1).init()
+        master(t1)
 
         try {
             database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
@@ -1146,7 +1164,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             //expected
         }
 
-        new DaoMaster({ database }, t2).init()
+        master(t2)
         database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
     }
 
@@ -1172,8 +1190,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        DaoMaster master = new DaoMaster({ database }, registry)
-        master.init()
+        master(registry)
 
         Cursor cursor = database.rawQuery("PRAGMA index_info('CUSTOM_TEXT')", null)
         assert cursor.moveToNext()
@@ -1181,32 +1198,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void runInTxSuccess() {
-        DaoRegistry registry = generateRegistry([[
-            fullClassName: "test.T",
-            sourceFile   : """
-                package test;
+        def dao = simplestDao()
 
-                import com.github.artyomcool.dante.annotation.*;
-
-                @Entity
-                public class T {
-
-                    @Id
-                    Long id;
-
-                }
-            """
-        ]])
-
-        DaoMaster master = new DaoMaster({ database }, registry)
-        master.init()
-
-        def testClass = registry.loadClass('test.T')
-        def dao = master.dao(testClass)
         dao.runInTx(new Runnable() {
             @Override
             void run() {
-                dao.insert(testClass.newInstance())
+                dao.insert(dao.newInstance())
             }
         })
 
@@ -1215,33 +1212,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void runInTxFail() {
-        DaoRegistry registry = generateRegistry([[
-            fullClassName: "test.T",
-            sourceFile   : """
-                package test;
-
-                import com.github.artyomcool.dante.annotation.*;
-
-                @Entity
-                public class T {
-
-                    @Id
-                    Long id;
-
-                }
-            """
-        ]])
-
-        DaoMaster master = new DaoMaster({ database }, registry)
-        master.init()
-
-        def testClass = registry.loadClass('test.T')
-        def dao = master.dao(testClass)
+        def dao = simplestDao()
         try {
             dao.runInTx(new Runnable() {
                 @Override
                 void run() {
-                    dao.insert(testClass.newInstance())
+                    dao.insert(dao.newInstance())
                     throw new RuntimeException("Expected")
                 }
             })
@@ -1254,32 +1230,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void callInTxSuccess() {
-        DaoRegistry registry = generateRegistry([[
-            fullClassName: "test.T",
-            sourceFile   : """
-                package test;
+        def dao = simplestDao()
 
-                import com.github.artyomcool.dante.annotation.*;
-
-                @Entity
-                public class T {
-
-                    @Id
-                    Long id;
-
-                }
-            """
-        ]])
-
-        DaoMaster master = new DaoMaster({ database }, registry)
-        master.init()
-
-        def testClass = registry.loadClass('test.T')
-        def dao = master.dao(testClass)
         def result = dao.callInTx(new Callable() {
             @Override
             Object call() throws Exception {
-                dao.insert(testClass.newInstance())
+                dao.insert(dao.newInstance())
                 return 'result'
             }
         })
@@ -1290,7 +1246,39 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
     @Test
     void callInTxFail() {
-        DaoRegistry registry = generateRegistry([[
+        def dao = simplestDao()
+        try {
+            dao.callInTx(new Callable() {
+                @Override
+                Object call() throws Exception {
+                    dao.insert(dao.newInstance())
+                    throw new RuntimeException("Expected")
+                }
+            })
+        } catch (RuntimeException e) {
+            assert e.message == "Expected"
+        }
+
+        assert dao.selectUnique('') == null
+    }
+
+    private DaoMaster master(DaoRegistry registry) {
+        def result = new DaoMaster({database}, registry)
+        result.init()
+
+        result
+    }
+
+    private Dao dao(DaoRegistry registry) {
+        return master(registry).dao('test.T')
+    }
+
+    private Dao simplestDao() {
+        dao(simplestRegistry())
+    }
+
+    private DaoRegistry simplestRegistry() {
+        generateRegistry([[
             fullClassName: "test.T",
             sourceFile   : """
                 package test;
@@ -1306,25 +1294,6 @@ class AnnotationProcessorTest extends AbstractAptTest {
                 }
             """
         ]])
-
-        DaoMaster master = new DaoMaster({ database }, registry)
-        master.init()
-
-        def testClass = registry.loadClass('test.T')
-        def dao = master.dao(testClass)
-        try {
-            dao.callInTx(new Callable() {
-                @Override
-                Object call() throws Exception {
-                    dao.insert(testClass.newInstance())
-                    throw new RuntimeException("Expected")
-                }
-            })
-        } catch (RuntimeException e) {
-            assert e.message == "Expected"
-        }
-
-        assert dao.selectUnique('') == null
     }
 
 }

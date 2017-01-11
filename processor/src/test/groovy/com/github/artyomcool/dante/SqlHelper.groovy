@@ -342,6 +342,9 @@ class SqlHelper {
                         sql.getConnection().rollback()
                     }
                     sql.getConnection().setAutoCommit(savedAutoCommit)
+                },
+                inTransaction : {
+                    sql.getConnection().autoCommit
                 }
         ] as SQLiteDatabase
     }
