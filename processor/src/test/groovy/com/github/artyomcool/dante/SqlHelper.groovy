@@ -344,7 +344,7 @@ class SqlHelper {
                     sql.getConnection().setAutoCommit(savedAutoCommit)
                 },
                 inTransaction : {
-                    sql.getConnection().autoCommit
+                    !sql.getConnection().autoCommit
                 }
         ] as SQLiteDatabase
     }
