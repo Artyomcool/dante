@@ -101,7 +101,8 @@ public class DaoGenerator {
         );
 
         fields = fieldsIn(entity.getEnclosedElements()).stream()
-                .filter(e -> !e.getModifiers().contains(Modifier.TRANSIENT))
+                .filter(e -> !e.getModifiers().contains(Modifier.TRANSIENT) &&
+                        !e.getModifiers().contains(Modifier.STATIC))
                 .collect(Collectors.toList());
 
         List<VariableElement> elementsWithId = fields.stream()
