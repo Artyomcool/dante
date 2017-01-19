@@ -19,6 +19,7 @@ public class MigrationGenerator {
     private final RegistryGenerator registryGenerator;
     private final TypeElement element;
     private final ClassName type;
+    private int version = 1;
 
     public MigrationGenerator(RegistryGenerator registryGenerator, TypeElement element) {
         this.registryGenerator = registryGenerator;
@@ -26,7 +27,8 @@ public class MigrationGenerator {
         this.type = ClassName.get(element);
     }
 
-    public ClassName generate() throws IOException {
+    public GeneratedMigration generate() throws IOException {
+
         ParameterizedTypeName returnType = ParameterizedTypeName.get(List.class, Migration.class);
 
         CodeBlock.Builder codeBuilder = CodeBlock.builder();
@@ -49,6 +51,8 @@ public class MigrationGenerator {
                                     .build()
                     ));
             codeBuilder.add("break;$<\n");
+
+            version = Math.max(version, migrations.getVersion());
         });
 
         codeBuilder.add("}\n");
@@ -79,7 +83,8 @@ public class MigrationGenerator {
                 .build();
 
         file.writeTo(registryGenerator.getProcessingEnv().getFiler());
-        return ClassName.get(getPackage(element), typeSpec.name);
+        ClassName className = ClassName.get(getPackage(element), typeSpec.name);
+        return new GeneratedMigration(className, version);
 
     }
 

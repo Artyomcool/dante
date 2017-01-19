@@ -34,12 +34,11 @@ import com.squareup.javapoet.*;
 import javax.lang.model.element.*;
 import javax.lang.model.type.TypeMirror;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Spliterator;
+import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.github.artyomcool.dante.RegistryGenerator.*;
 import static javax.lang.model.element.Modifier.PROTECTED;
@@ -166,7 +165,19 @@ public class DaoGenerator {
 
         file.writeTo(registryGenerator.getProcessingEnv().getFiler());
 
-        return new GeneratedDao(this, typeSpec);
+        int maxVersion = getMaxVersion();
+        return new GeneratedDao(this, typeSpec, maxVersion);
+    }
+
+    private int getMaxVersion() {
+        int version = annotation.sinceVersion();
+        OptionalInt max = IntStream.concat(
+                fields.stream().mapToInt(this::sinceVersion),
+                fields.stream().mapToInt(this::indexSince)).max();
+        if (max.isPresent()) {
+            version = Math.max(version, max.getAsInt());
+        }
+        return version;
     }
 
     private FieldSpec genIdField() {
@@ -763,7 +774,7 @@ public class DaoGenerator {
         return MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
                 .addParameter(sqliteDatabase(), "db")
-                .addStatement("super(db, $L)", entity.getAnnotation(Entity.class).sinceVersion())
+                .addStatement("super(db, $L)", annotation.sinceVersion())
                 .build();
     }
 

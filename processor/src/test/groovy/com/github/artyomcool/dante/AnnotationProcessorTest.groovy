@@ -710,7 +710,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
             """
         ]])
 
-        def dao = dao(registry)
+        def master = master(registry)
+        def dao = master.dao('test.T')
         assert dao.getSinceVersion() == 100
     }
 
@@ -875,6 +876,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
         assert dao1.selectUnique('') == e1
         assert dao2.selectUnique('') == e2
+
+        assert currentDbVersion(daoMaster) == 2
     }
 
     @Test
@@ -926,12 +929,15 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert e1.id
 
         registry = generateRegistry([t2])
-        daoT = dao(registry)
+        def daoMaster = master(registry)
+        daoT = daoMaster.dao('test.T')
         assert database.version == 2
 
         def e2 = daoT.selectUnique('')
         assert e2.id == e1.id
         assert !e2.newField
+
+        assert currentDbVersion(daoMaster) == 2
     }
 
     @Test
@@ -989,7 +995,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert e1.id
 
         registry = generateRegistry([t2])
-        daoT = dao(registry)
+        def daoMaster = master(registry)
+        daoT = daoMaster.dao('test.T')
         assert database.version == 2
 
         def e2 = daoT.selectUnique('')
@@ -997,6 +1004,8 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert e2.newField == 0
         assert e2.newField2 == 0
         assert e2.newField3 == null
+
+        assert currentDbVersion(daoMaster) == 2
     }
 
     @Test
@@ -1078,6 +1087,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
         def e2 = daoMaster.dao('test.T').selectUnique('')
         assert e2.id == e1.id
         assert e2.newField == 0
+
+        assert currentDbVersion(daoMaster) == 2
+    }
+
+    private static currentDbVersion(def daoMaster) {
+        daoMaster.loadClass('com.github.artyomcool.dante.DefaultRegistry').CURRENT_DB_VERSION
     }
 
     @Test
@@ -1193,8 +1208,10 @@ class AnnotationProcessorTest extends AbstractAptTest {
             //expected
         }
 
-        master(t2)
+        def daoMaster = master(t2)
         database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
+
+        assert currentDbVersion(daoMaster) == 2
     }
 
     @Test

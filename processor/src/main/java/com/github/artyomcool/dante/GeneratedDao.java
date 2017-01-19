@@ -35,10 +35,12 @@ public class GeneratedDao {
 
     private final DaoGenerator generator;
     private final TypeSpec dao;
+    private final int maxVersion;
 
-    public GeneratedDao(DaoGenerator generator, TypeSpec dao) {
+    public GeneratedDao(DaoGenerator generator, TypeSpec dao, int maxVersion) {
         this.generator = generator;
         this.dao = dao;
+        this.maxVersion = maxVersion;
     }
 
     public Element getEntity() {
@@ -64,4 +66,9 @@ public class GeneratedDao {
                 .get();
         return generator.getRegistryGenerator().toTableName(variableElement.getSimpleName().toString());
     }
+
+    public int getMaxVersion() {
+        return maxVersion;
+    }
+
 }

@@ -45,6 +45,8 @@ public class RegistryGenerator {
     private final ProcessingEnvironment processingEnv;
     private final List<GeneratorError> errors = new ArrayList<>();
 
+    private int maxVersion = 1;
+
     public RegistryGenerator(RoundEnvironment roundEnvironment, ProcessingEnvironment processingEnv) {
         this.roundEnvironment = roundEnvironment;
         this.processingEnv = processingEnv;
@@ -65,6 +67,8 @@ public class RegistryGenerator {
                     DaoGenerator generator = new DaoGenerator(this, e);
                     GeneratedDao generated = generator.generate();
                     generatedEntities.put(generated.getQualifiedName(), generated);
+
+                    maxVersion = Math.max(maxVersion, generated.getMaxVersion());
                 } catch (IOException exception) {
                     throw new UncheckedIOException(exception);
                 }
@@ -80,11 +84,15 @@ public class RegistryGenerator {
             roundEnvironment.getElementsAnnotatedWith(Migration.class).forEach(e -> {
                 try {
                     MigrationGenerator generator = new MigrationGenerator(this, (TypeElement) e);
-                    generatedMigrations.add(generator.generate());
+                    GeneratedMigration generated = generator.generate();
+                    generatedMigrations.add(generated.getClassName());
+
+                    maxVersion = Math.max(maxVersion, generated.getMaxVersion());
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
             });
+
             MethodSpec.Builder initDaoBuilder = MethodSpec.methodBuilder("initDao")
                     .addModifiers(Modifier.PROTECTED)
                     .addAnnotation(Override.class)
@@ -149,6 +157,14 @@ public class RegistryGenerator {
                 );
             }
             TypeSpec spec = registryBuilder
+                    .addField(FieldSpec.builder(
+                            Integer.TYPE,
+                            "CURRENT_DB_VERSION",
+                            Modifier.PUBLIC,
+                            Modifier.STATIC,
+                            Modifier.FINAL)
+                            .initializer("$L", maxVersion)
+                            .build())
                     .addMethod(initDaoBuilder.build())
                     .addMethod(initCustomMigrations.build())
                     .build();
