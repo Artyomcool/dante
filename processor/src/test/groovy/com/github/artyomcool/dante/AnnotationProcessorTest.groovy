@@ -627,6 +627,35 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void deleteString() {
+        def t = [
+                fullClassName: "test.T",
+                sourceFile: """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id(iWillSetIdByMySelf = true)
+                    String text;
+
+                }
+            """
+        ]
+
+        def dao = dao(generateRegistry([t]))
+        def e = dao.newInstance()
+        e.text = '7'
+
+        dao.insert(e)
+        dao.delete(e)
+
+        assert dao.selectList('').isEmpty()
+    }
+
+    @Test
     void clear() {
         def dao = simplestDao()
         def e = dao.newInstance()
@@ -827,12 +856,12 @@ class AnnotationProcessorTest extends AbstractAptTest {
         ]
 
         def registry = generateRegistry([t1])
-        DaoMaster daoMaster = master(registry)
+        master(registry)
 
         assert database.version == 1
 
         registry = generateRegistry([t1, t2])
-        daoMaster = master(registry)
+        def daoMaster = master(registry)
         assert database.version == 2
 
         def dao1 = daoMaster.dao('test.T1')
@@ -1160,7 +1189,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
         try {
             database.rawQuery("PRAGMA index_info('IDX_TEXT')", null)
             throw new IllegalStateException('Should be aborted due to no results')
-        } catch (SQLException e) {
+        } catch (SQLException ignored) {
             //expected
         }
 

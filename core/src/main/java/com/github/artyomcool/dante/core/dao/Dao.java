@@ -39,6 +39,7 @@ import java.util.concurrent.Callable;
  * Base class for all DAO. In most cases should be accessed through {@link DaoMaster#dao(Class)} with entity class.
  * Usable for inserting, updating and deleting entities. In most cases shouldn't be used for direct queries.
  * Use {@link DaoMaster#queries(Class)} for that.
+ *
  * @param <E>
  */
 @SuppressWarnings("unused")
@@ -94,6 +95,7 @@ public abstract class Dao<E> {
 
     /**
      * Returns DB version in which this field where presented. Used for automatic migration.
+     *
      * @return DB version since field exists
      */
     public int getSinceVersion() {
@@ -103,6 +105,7 @@ public abstract class Dao<E> {
     /**
      * Creates one entity from current row of cursor. In case the entity with the same id was already created,
      * it will be just returned, without re-reading from cursor.
+     *
      * @param cursor initialized cursor to perform reading values
      * @return a new entity initialized from the cursor columns or the old entity with the same id
      */
@@ -315,7 +318,9 @@ public abstract class Dao<E> {
         if (deleteByIdStatement == null) {
             tmp.append("DELETE FROM '")
                     .append(getTableName())
-                    .append("' WHERE _ROWID_ = ?");
+                    .append("' WHERE ")
+                    .append(getIdProperty().getColumnName())
+                    .append(" = ?");
 
             deleteByIdStatement = db.compileStatement(recycle(tmp));
         }
@@ -351,7 +356,7 @@ public abstract class Dao<E> {
 
     public void ensureIndex(Property property, int version) {
         db.execSQL("CREATE INDEX IF NOT EXISTS " + property.getIndexName() + " ON " +
-                getTableName() + " (" + property.getColumnName() + ")" );
+                getTableName() + " (" + property.getColumnName() + ")");
     }
 
     private String createTable(boolean ifNotExists, int version) {
