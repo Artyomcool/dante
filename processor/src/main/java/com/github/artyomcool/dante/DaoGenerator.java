@@ -32,7 +32,9 @@ import com.github.artyomcool.dante.core.dao.ObjectWeakValueIdentityHashMap;
 import com.squareup.javapoet.*;
 
 import javax.lang.model.element.*;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Types;
 import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
@@ -99,7 +101,8 @@ public class DaoGenerator {
                 ClassName.get(Property.class)
         );
 
-        fields = fieldsIn(entity.getEnclosedElements()).stream()
+        Stream<VariableElement> fieldsStream = fieldsStream((TypeElement) entity);
+        fields = fieldsStream
                 .filter(e -> !e.getModifiers().contains(Modifier.TRANSIENT) &&
                         !e.getModifiers().contains(Modifier.STATIC))
                 .collect(Collectors.toList());
@@ -117,6 +120,18 @@ public class DaoGenerator {
         } else {
             idField = elementsWithId.get(0);
         }
+    }
+
+    private Stream<VariableElement> fieldsStream(TypeElement entity) {
+        Types typeUtils = registryGenerator.getProcessingEnv().getTypeUtils();
+        Stream<VariableElement> stream = fieldsIn(entity.getEnclosedElements()).stream();
+        System.out.println(entity);
+        while (entity.getSuperclass().getKind() != TypeKind.NONE) {
+            entity = (TypeElement) typeUtils.asElement(entity.getSuperclass());
+            System.out.println(entity);
+            stream = Stream.concat(fieldsIn(entity.getEnclosedElements()).stream(), stream);
+        }
+        return stream;
     }
 
     public Element getEntity() {

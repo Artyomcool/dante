@@ -1308,6 +1308,61 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert dao.selectUnique('') == null
     }
 
+    @Test
+    void extension() {
+        def r = [
+        [
+            fullClassName: "test.B",
+            sourceFile   : """
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                public class B {
+
+                    @Id
+                    public Long id;
+                    public String text;
+
+                }
+            """
+        ],
+        [
+            fullClassName: "test.T",
+            sourceFile   : """
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T extends B {
+
+                    public int someNewData;
+
+                }
+            """
+        ]]
+        DaoRegistry registry = generateRegistry(r)
+
+        def dao1 = dao(registry)
+        def t = dao1.newInstance()
+        t.someNewData = 7
+        t.text = 'test'
+
+        dao1.insert(t)
+
+        registry = generateRegistry(r)
+        def dao2 = dao(registry)
+        def t2 = dao2.selectUnique('')
+
+        assert t != t2
+        assert t.id == t2.id
+        assert t.text == t2.text
+        assert t.someNewData == t2.someNewData
+    }
+
     private DaoMaster master(DaoRegistry registry) {
         def result = new DaoMaster({database}, registry)
         result.init()
