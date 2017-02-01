@@ -44,18 +44,24 @@ public class DaoMaster implements Registry {
 
     public void init() {
         SQLiteDatabase db = opener.open();
-        delegate.init(db);
-        int schemeVersion = delegate.getVersion();
-        int dbVersion = db.getVersion();
-        if (dbVersion > schemeVersion) {
-            onDowngrade(db);
-        } else if (dbVersion < schemeVersion) {
-            if (dbVersion == 0) {
-                onCreate();
-            } else {
-                onUpgrade(db);
+        db.beginTransaction();
+        try {
+            delegate.init(db);
+            int schemeVersion = delegate.getVersion();
+            int dbVersion = db.getVersion();
+            if (dbVersion > schemeVersion) {
+                onDowngrade(db);
+            } else if (dbVersion < schemeVersion) {
+                if (dbVersion == 0) {
+                    onCreate();
+                } else {
+                    onUpgrade(db);
+                }
+                db.setVersion(schemeVersion);
             }
-            db.setVersion(schemeVersion);
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
     }
 
