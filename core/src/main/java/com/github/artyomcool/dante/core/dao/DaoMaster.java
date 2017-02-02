@@ -57,8 +57,8 @@ public class DaoMaster implements Registry {
                 } else {
                     onUpgrade(db);
                 }
-                db.setVersion(schemeVersion);
             }
+            db.setVersion(schemeVersion);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
@@ -72,7 +72,16 @@ public class DaoMaster implements Registry {
     }
 
     private void onDowngrade(SQLiteDatabase db) {
-        throw new UnsupportedOperationException("not implemented");
+        db.beginTransaction();
+        try {
+            for (final Dao<?> dao : delegate.getDao()) {
+                dao.dropTable();
+            }
+            onCreate();
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
+        }
     }
 
     private void onUpgrade(SQLiteDatabase db) {

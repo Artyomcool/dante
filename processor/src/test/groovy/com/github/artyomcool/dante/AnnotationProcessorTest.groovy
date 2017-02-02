@@ -1091,6 +1091,88 @@ class AnnotationProcessorTest extends AbstractAptTest {
         assert currentDbVersion(daoMaster) == 2
     }
 
+    @Test
+    void downgrade() {
+        def t1 = [
+                fullClassName: "test.T1",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T1 {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def t2 = [
+                fullClassName: "test.T2",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity(sinceVersion = 2)
+                public class T2 {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def t2Down = [
+                fullClassName: "test.T2",
+                sourceFile   : """
+                package test;
+
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T2 {
+
+                    @Id
+                    Long id;
+
+                }
+            """
+        ]
+
+        def registry = generateRegistry([t1])
+        master(registry)
+
+        assert database.version == 1
+
+        registry = generateRegistry([t1, t2])
+        def daoMaster = master(registry)
+        assert database.version == 2
+
+        def dao1 = daoMaster.dao('test.T1')
+        def dao2 = daoMaster.dao('test.T2')
+
+        def e1 = dao1.newInstance()
+        dao1.insert(e1)
+
+        def e2 = dao2.newInstance()
+        dao2.insert(e2)
+
+        registry = generateRegistry([t1, t2Down])
+        daoMaster = master(registry)
+        assert database.version == 1
+
+        dao1 = daoMaster.dao('test.T1')
+        dao2 = daoMaster.dao('test.T2')
+
+        assert dao1.selectList("").isEmpty()
+        assert dao2.selectList("").isEmpty()
+    }
+
     private static currentDbVersion(def daoMaster) {
         daoMaster.loadClass('com.github.artyomcool.dante.DefaultRegistry').CURRENT_DB_VERSION
     }
