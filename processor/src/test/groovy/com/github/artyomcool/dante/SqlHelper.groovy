@@ -331,6 +331,7 @@ class SqlHelper {
                 beginTransaction: {
                     savedAutoCommit = sql.getConnection().getAutoCommit()
                     sql.getConnection().setAutoCommit(false)
+                    transactionSuccess = false;
                 },
                 setTransactionSuccessful: {
                     transactionSuccess = true
