@@ -2,7 +2,9 @@
 .idea
 .gradle
 local.properties
+/build
 annotation/build
 core/build
 processor/build
+async/build
 /processor/src/main/generated/

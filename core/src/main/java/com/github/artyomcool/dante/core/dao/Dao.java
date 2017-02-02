@@ -332,6 +332,10 @@ public abstract class Dao<E> {
         ensureIndexes(Integer.MAX_VALUE);
     }
 
+    public void dropTable() {
+        db.execSQL(dropTable(true));
+    }
+
     public void ensureTable(int version) {
         db.execSQL(createTable(true, version));
         ensureIndexes(version);
@@ -376,6 +380,15 @@ public abstract class Dao<E> {
         tmp.setLength(tmp.length() - 1);
         tmp.append(')');
 
+        return recycle(tmp);
+    }
+
+    private String dropTable(boolean ifExists) {
+        tmp.append("DROP TABLE ");
+        if (ifExists) {
+            tmp.append("IF EXISTS ");
+        }
+        tmp.append('\'').append(getTableName()).append('\'');
         return recycle(tmp);
     }
 
