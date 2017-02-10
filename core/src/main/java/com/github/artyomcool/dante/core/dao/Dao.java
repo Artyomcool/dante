@@ -245,6 +245,34 @@ public abstract class Dao<E> {
         removeFromCache(entity);
     }
 
+    public void delete(Iterable<E> entities) {
+        SQLiteStatement deleteStatement = ensureDeleteQuery();
+
+        boolean needTransaction = !db.inTransaction();
+        if (needTransaction) {
+            db.beginTransaction();
+        }
+
+        try {
+            for (E e : entities) {
+                executeDelete(e, deleteStatement);
+            }
+            if (needTransaction) {
+                db.setTransactionSuccessful();
+            }
+        } finally {
+            if (needTransaction) {
+                db.endTransaction();
+            }
+        }
+    }
+
+    private void executeDelete(E entity, SQLiteStatement deleteStatement) {
+        bindId(entity, deleteStatement, 1);
+        deleteStatement.execute();
+        removeFromCache(entity);
+    }
+
     public void clear() {
         db.execSQL("DELETE FROM '" + getTableName() + "'");
         clearCache();
