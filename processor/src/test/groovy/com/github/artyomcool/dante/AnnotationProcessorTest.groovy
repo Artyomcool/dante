@@ -627,6 +627,16 @@ class AnnotationProcessorTest extends AbstractAptTest {
     }
 
     @Test
+    void deleteBatch() {
+        def dao = simplestDao()
+        def e = [dao.newInstance(), dao.newInstance()]
+        dao.insert(e)
+        dao.delete(e)
+
+        assert dao.selectList('').isEmpty()
+    }
+
+    @Test
     void deleteString() {
         def t = [
                 fullClassName: "test.T",
