@@ -30,5 +30,6 @@ public @interface Index {
 
     int sinceVersion() default 1;
     String name() default "";
+    boolean unique() default false;
 
 }

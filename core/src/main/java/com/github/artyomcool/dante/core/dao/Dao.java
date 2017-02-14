@@ -25,6 +25,7 @@ package com.github.artyomcool.dante.core.dao;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteStatement;
+import com.github.artyomcool.dante.core.CompoundIndex;
 import com.github.artyomcool.dante.core.Property;
 import net.jcip.annotations.NotThreadSafe;
 
@@ -76,6 +77,8 @@ public abstract class Dao<E> {
     protected abstract List<Property> getProperties();
 
     protected abstract Property getIdProperty();
+
+    protected abstract List<CompoundIndex> getCompoundIndexes();
 
     protected abstract E createEntity(Cursor cursor);
 
@@ -384,11 +387,45 @@ public abstract class Dao<E> {
             }
             ensureIndex(property, version);
         }
+        for (CompoundIndex compoundIndex : getCompoundIndexes()) {
+            int indexedSince = compoundIndex.getSinceVersion();
+            if (indexedSince <= version) {
+                ensureIndex(compoundIndex, version);
+            }
+        }
     }
 
     public void ensureIndex(Property property, int version) {
-        db.execSQL("CREATE INDEX IF NOT EXISTS " + property.getIndexName() + " ON " +
-                getTableName() + " (" + property.getColumnName() + ")");
+        db.execSQL(
+                "CREATE" + (property.isIndexUnique() ? " UNIQUE" : "")
+                        + " INDEX IF NOT EXISTS " + property.getIndexName() + " ON " +
+                        getTableName() + " (" + property.getColumnName() + ")"
+        );
+    }
+
+    public void ensureIndex(CompoundIndex index, int version) {
+        tmp.append("CREATE");
+        if (index.isUnique()) {
+            tmp.append(" UNIQUE");
+        }
+        tmp.append(" INDEX IF NOT EXISTS ")
+                .append(index.getName())
+                .append(" ON ")
+                .append(getTableName())
+                .append(" (");
+
+        for (CompoundIndex.Field field : index.getFields()) {
+            String columnName = field.getProperty().getColumnName();
+            tmp.append(columnName);
+            if (field.isDesc()) {
+                tmp.append(" DESC");
+            }
+            tmp.append(",");
+        }
+        tmp.setLength(tmp.length() - 1);
+        tmp.append(")");
+
+        db.execSQL(recycle(tmp));
     }
 
     private String createTable(boolean ifNotExists, int version) {

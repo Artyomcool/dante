@@ -33,6 +33,7 @@ public final class Property {
     private final String defaultValue;
     private final int indexedSince;
     private final String indexName;
+    private final boolean indexUnique;
 
     private Property(Builder builder) {
         this.sinceVersion = builder.sinceVersion;
@@ -42,6 +43,7 @@ public final class Property {
         this.defaultValue = builder.defaultValue;
         this.indexedSince = builder.indexedSince;
         this.indexName = builder.indexName;
+        this.indexUnique = builder.indexUnique;
     }
 
     public int getSinceVersion() {
@@ -72,6 +74,10 @@ public final class Property {
         return indexName;
     }
 
+    public boolean isIndexUnique() {
+        return indexUnique;
+    }
+
     public static class Builder {
         private int sinceVersion = 1;
         private String columnName;
@@ -80,6 +86,7 @@ public final class Property {
         private String defaultValue;
         private int indexedSince = NO_INDEX;
         private String indexName;
+        private boolean indexUnique;
 
         public Builder sinceVersion(int sinceVersion) {
             this.sinceVersion = sinceVersion;
@@ -106,9 +113,10 @@ public final class Property {
             return this;
         }
 
-        public Builder index(int sinceVersion, String indexName) {
+        public Builder index(int sinceVersion, String indexName, boolean unique) {
             this.indexedSince = sinceVersion;
             this.indexName = indexName;
+            this.indexUnique = unique;
             return this;
         }
 

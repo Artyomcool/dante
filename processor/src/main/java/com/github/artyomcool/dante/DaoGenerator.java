@@ -22,11 +22,9 @@
 
 package com.github.artyomcool.dante;
 
-import com.github.artyomcool.dante.annotation.Entity;
-import com.github.artyomcool.dante.annotation.Id;
-import com.github.artyomcool.dante.annotation.Index;
-import com.github.artyomcool.dante.annotation.SinceVersion;
-import com.github.artyomcool.dante.core.Property;
+import com.github.artyomcool.dante.annotation.*;
+import com.github.artyomcool.dante.annotation.CompoundIndex;
+import com.github.artyomcool.dante.core.*;
 import com.github.artyomcool.dante.core.dao.LongWeakValueIdentityHashMap;
 import com.github.artyomcool.dante.core.dao.ObjectWeakValueIdentityHashMap;
 import com.squareup.javapoet.*;
@@ -41,6 +39,7 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import static com.github.artyomcool.dante.RegistryGenerator.*;
 import static javax.lang.model.element.Modifier.PROTECTED;
@@ -63,7 +62,8 @@ public class DaoGenerator {
     private final Entity annotation;
 
     private final TypeName abstractDaoType;
-    private final ParameterizedTypeName listOfPropertiesType;
+    private final TypeName listOfPropertiesType;
+    private final TypeName listOfCompoundIndexesType;
     private final TypeName entityTypeName;
     private final List<VariableElement> fields;
     private final VariableElement idField;
@@ -100,6 +100,10 @@ public class DaoGenerator {
                 ClassName.get(List.class),
                 ClassName.get(Property.class)
         );
+        listOfCompoundIndexesType = ParameterizedTypeName.get(
+                ClassName.get(List.class),
+                ClassName.get(com.github.artyomcool.dante.core.CompoundIndex.class)
+        );
 
         Stream<VariableElement> fieldsStream = fieldsStream((TypeElement) entity);
         fields = fieldsStream
@@ -125,10 +129,8 @@ public class DaoGenerator {
     private Stream<VariableElement> fieldsStream(TypeElement entity) {
         Types typeUtils = registryGenerator.getProcessingEnv().getTypeUtils();
         Stream<VariableElement> stream = fieldsIn(entity.getEnclosedElements()).stream();
-        System.out.println(entity);
         while (entity.getSuperclass().getKind() != TypeKind.NONE) {
             entity = (TypeElement) typeUtils.asElement(entity.getSuperclass());
-            System.out.println(entity);
             stream = Stream.concat(fieldsIn(entity.getEnclosedElements()).stream(), stream);
         }
         return stream;
@@ -160,10 +162,12 @@ public class DaoGenerator {
                 .addField(genCacheField())
                 .addField(genIdField())
                 .addField(genFields())
+                .addField(genCompoundIndexes())
                 .addMethod(genConstructor())
                 .addMethod(genTableName())
-                .addMethod(genProperties())
                 .addMethod(genIdProperty())
+                .addMethod(genProperties())
+                .addMethod(genGetCompoundIndexes())
                 .addMethod(genCreateEntity())
                 .addMethod(genBind())
                 .addMethod(genBindId())
@@ -207,6 +211,12 @@ public class DaoGenerator {
     }
 
     private FieldSpec genFields() {
+        FieldSpec.Builder fields_ = FieldSpec.builder(
+                listOfPropertiesType,
+                "fields_",
+                Modifier.PRIVATE,
+                Modifier.FINAL
+        );
 
         CodeBlock.Builder code = CodeBlock.builder()
                 .add("$T.asList(", Arrays.class);
@@ -220,14 +230,48 @@ public class DaoGenerator {
         code.add("\n");
         code.unindent();
         code.add(")");
+        return fields_
+                .initializer(code.build())
+                .build();
+    }
 
-        FieldSpec.Builder fields_ = FieldSpec.builder(
-                listOfPropertiesType,
-                "fields_",
+    private FieldSpec genCompoundIndexes() {
+        FieldSpec.Builder indexes_ = FieldSpec.builder(
+                listOfCompoundIndexesType,
+                "indexes_",
                 Modifier.PRIVATE,
                 Modifier.FINAL
         );
-        return fields_
+
+        List<CompoundIndex> indexes = new ArrayList<>();
+        CompoundIndex aCoumpoundIndex = entity.getAnnotation(CompoundIndex.class);
+        if (aCoumpoundIndex != null) {
+            indexes.add(aCoumpoundIndex);
+        }
+        CompoundIndexes aCompoundIndexes = entity.getAnnotation(CompoundIndexes.class);
+        if (aCompoundIndexes != null) {
+            indexes.addAll(Arrays.asList(aCompoundIndexes.value()));
+        }
+
+        if (indexes.isEmpty()) {
+            return indexes_
+                    .initializer("$T.emptyList()", Collections.class)
+                    .build();
+        }
+
+        CodeBlock.Builder code = CodeBlock.builder()
+                .add("$T.asList(", Arrays.class);
+        code.indent();
+
+        join(indexes,
+                index -> code.add(buildIndex(index)),
+                index -> code.add(",\n")
+        );
+
+        code.add("\n");
+        code.unindent();
+        code.add(")");
+        return indexes_
                 .initializer(code.build())
                 .build();
     }
@@ -261,8 +305,26 @@ public class DaoGenerator {
                 .add("\n.columnType($S)", columnType(field))
                 .add("\n.columnExtraDefinition($S)", extraDefinition(field))
                 .add("\n.defaultValue($S)", defaultValue(field))
-                .add("\n.index($L, $S)", indexSince(field), indexName(field))
+                .add("\n.index($L, $S, $L)", indexSince(field), indexName(field), indexUnique(field))
                 .add("\n.build()").unindent().unindent()
+                .build();
+    }
+
+    private CodeBlock buildIndex(CompoundIndex index) {
+        CodeBlock.Builder builder = CodeBlock.builder()
+                .add("new $T()", com.github.artyomcool.dante.core.CompoundIndex.Builder.class).indent().indent()
+                .add("\n.sinceVersion($L)", index.sinceVersion())
+                .add("\n.name($S)", indexName(index))
+                .add("\n.unique($L)", index.unique());
+
+        for (Field field : index.fields()) {
+            int fieldIndex = fieldIndex(field.name());
+            boolean isDesc = field.order() == Field.Sort.DESC;
+
+            builder.add("\n.property(fields_.get($L), $L)", fieldIndex, isDesc);
+        }
+
+        return builder.add("\n.build()").unindent().unindent()
                 .build();
     }
 
@@ -344,6 +406,26 @@ public class DaoGenerator {
             return "IDX_" + columnName(field);
         }
         return indexName;
+    }
+
+    private boolean indexUnique(VariableElement field) {
+        Index index = field.getAnnotation(Index.class);
+        return index != null && index.unique();
+    }
+
+    private String indexName(CompoundIndex index) {
+        if (!index.name().isEmpty()) {
+            return index.name();
+        }
+
+        StringBuilder result = new StringBuilder("IDX");
+
+        for (Field field : index.fields()) {
+            result.append("_")
+                    .append(columnName(fieldByName(field.name())));
+        }
+
+        return result.toString();
     }
 
     private Optional<String> getSinceDefault(VariableElement field) {
@@ -757,6 +839,12 @@ public class DaoGenerator {
                 .build();
     }
 
+    private MethodSpec genGetCompoundIndexes() {
+        return implement(PROTECTED, listOfCompoundIndexesType, "getCompoundIndexes")
+                .addStatement("return indexes_")
+                .build();
+    }
+
     private boolean isNullable(VariableElement field) {
         if (field.asType().getKind().isPrimitive()) {
             return false;
@@ -791,6 +879,17 @@ public class DaoGenerator {
                 .addParameter(sqliteDatabase(), "db")
                 .addStatement("super(db, $L)", annotation.sinceVersion())
                 .build();
+    }
+
+    private VariableElement fieldByName(String name) {
+        return fields.stream()
+                .filter(variableElement -> variableElement.getSimpleName().toString().equals(name))
+                .findAny()
+                .orElseThrow(() -> new IllegalArgumentException("Field with name " + name + " not found"));
+    }
+
+    private int fieldIndex(String name) {
+        return fields.indexOf(fieldByName(name));
     }
 
 }

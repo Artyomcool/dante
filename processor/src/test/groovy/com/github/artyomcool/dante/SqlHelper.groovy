@@ -151,7 +151,7 @@ class SqlHelper {
 
                         @Override
                         String[] getColumnNames() {
-                            (1..getColumnCount()).collect { getColumnName(it) }
+                            (0..getColumnCount() - 1).collect { getColumnName(it) }
                         }
 
                         @Override
