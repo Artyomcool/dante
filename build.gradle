@@ -35,7 +35,7 @@ allprojects {
     apply plugin: 'provided-base'
 
     group 'com.github.artyomcool.dante'
-    version '0.1.4-SNAPSHOT'
+    version '0.1.4'
 
     sourceCompatibility = 1.7
 
