@@ -1421,7 +1421,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
 
                 import com.github.artyomcool.dante.annotation.*;
 
-                @CompoundIndexes(
+                @CompoundIndexes({
                     @CompoundIndex(
                         name = "MAGIC",
                         unique = true,
@@ -1434,7 +1434,7 @@ class AnnotationProcessorTest extends AbstractAptTest {
                         @Field(name = "number"),
                         @Field(name = "text")
                     })
-                )
+                })
                 @Entity
                 public class T {
 

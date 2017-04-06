@@ -87,7 +87,7 @@ public class DaoMaster implements Registry {
     private void onUpgrade(SQLiteDatabase db) {
         db.beginTransaction();
         try {
-            List<MigrationInfo> customMigrations = delegate.initCustomMigrations();
+            List<? extends MigrationInfo> customMigrations = delegate.initCustomMigrations();
             for (int i = db.getVersion() + 1; i <= delegate.getVersion(); i++) {
                 for (Migration migration : getMigrations(i)) {
                     migration.migrate();

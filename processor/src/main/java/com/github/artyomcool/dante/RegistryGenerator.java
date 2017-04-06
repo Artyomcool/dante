@@ -128,7 +128,7 @@ public class RegistryGenerator {
             MethodSpec.Builder initCustomMigrations = MethodSpec.methodBuilder("initCustomMigrations")
                     .addModifiers(Modifier.PROTECTED)
                     .addAnnotation(Override.class)
-                    .returns(ParameterizedTypeName.get(ClassName.get(List.class), ClassName.get(MigrationInfo.class)));
+                    .returns(ParameterizedTypeName.get(ClassName.get(List.class), WildcardTypeName.subtypeOf(MigrationInfo.class)));
 
             boolean hasMigrations = !generatedMigrations.isEmpty();
 

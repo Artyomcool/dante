@@ -63,7 +63,7 @@ public abstract class DaoRegistry implements Registry {
 
     protected abstract List<EntityInfo<?>> initDao(SQLiteDatabase db);
 
-    protected abstract List<MigrationInfo> initCustomMigrations();
+    protected abstract List<? extends MigrationInfo> initCustomMigrations();
 
     public int getVersion() {
         int version = 1;
