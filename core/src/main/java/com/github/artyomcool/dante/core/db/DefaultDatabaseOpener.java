@@ -25,16 +25,30 @@ package com.github.artyomcool.dante.core.db;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 
+/**
+ * Default implementation of {@link DatabaseOpener}.
+ * Delegates {@link #open} to the {@link Context#openOrCreateDatabase(String, int, SQLiteDatabase.CursorFactory)}.
+ */
 public class DefaultDatabaseOpener implements DatabaseOpener {
 
     private final Context context;
     private final String name;
 
+    /**
+     * Creates DefaultDatabaseOpener. <b>Note:</b> context will be stored as is, so typically you want to provide
+     * application context here.
+     *
+     * @param context context to perform open database
+     * @param name    name of DB
+     */
     public DefaultDatabaseOpener(Context context, String name) {
         this.context = context;
         this.name = name;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public SQLiteDatabase open() {
         return context.openOrCreateDatabase(name, SQLiteDatabase.OPEN_READWRITE, null);

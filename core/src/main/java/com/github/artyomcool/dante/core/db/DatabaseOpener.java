@@ -24,8 +24,18 @@ package com.github.artyomcool.dante.core.db;
 
 import android.database.sqlite.SQLiteDatabase;
 
+/**
+ * Interface to provide database.
+ */
 public interface DatabaseOpener {
 
+    /**
+     * Opens database. <b>Note:</b> can be called more then once.
+     * In this case previous db will be closed, so the new one should be created from scratch.
+     *
+     * @return database to work with
+     * @see DefaultDatabaseOpener
+     */
     SQLiteDatabase open();
 
 }
