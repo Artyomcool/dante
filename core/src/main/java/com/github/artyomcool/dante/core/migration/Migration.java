@@ -22,8 +22,16 @@
 
 package com.github.artyomcool.dante.core.migration;
 
+/**
+ * Migration interface.
+ *
+ * @see com.github.artyomcool.dante.annotation.Migration
+ */
 public interface Migration {
 
+    /**
+     * Performs migration.
+     */
     void migrate();
 
 }
