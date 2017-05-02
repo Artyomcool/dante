@@ -1,8 +1,8 @@
 package com.example.usernotes.dao;
 
+import com.github.artyomcool.dante.annotation.DbQueries;
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
-import com.github.artyomcool.dante.annotation.Queries;
 import com.github.artyomcool.dante.annotation.Query;
 
 import java.util.List;
@@ -20,7 +20,7 @@ public class Notification {
 
     long when;
 
-    @Queries(Notification.class)
+    @DbQueries
     public interface NotificationQueries {
 
         long DAY = TimeUnit.DAYS.toMillis(1);

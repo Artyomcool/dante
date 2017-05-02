@@ -7,7 +7,7 @@ import com.github.artyomcool.dante.async.DaoTask;
 import com.github.artyomcool.dante.async.UiDaoTask;
 import com.github.artyomcool.dante.async.UiTaskCallback;
 import com.github.artyomcool.dante.core.dao.DaoMaster;
-import com.github.artyomcool.dante.core.dao.DatabaseOpener;
+import com.github.artyomcool.dante.core.db.DatabaseOpener;
 
 import java.util.List;
 

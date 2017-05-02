@@ -22,233 +22,88 @@
 
 package com.github.artyomcool.dante;
 
-import com.github.artyomcool.dante.annotation.*;
 import com.github.artyomcool.dante.annotation.CompoundIndex;
-import com.github.artyomcool.dante.core.*;
-import com.github.artyomcool.dante.core.dao.LongWeakValueIdentityHashMap;
-import com.github.artyomcool.dante.core.dao.ObjectWeakValueIdentityHashMap;
+import com.github.artyomcool.dante.annotation.CompoundIndexes;
+import com.github.artyomcool.dante.annotation.Field;
+import com.github.artyomcool.dante.annotation.Id;
+import com.github.artyomcool.dante.core.EntityInfo;
 import com.squareup.javapoet.*;
 
-import javax.lang.model.element.*;
-import javax.lang.model.type.TypeKind;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.Name;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Types;
-import java.io.IOException;
 import java.util.*;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
-import static com.github.artyomcool.dante.RegistryGenerator.*;
+import static com.github.artyomcool.dante.Methods.implement;
+import static com.github.artyomcool.dante.PropertyGenerationHelper.isPrimitiveOrWrapper;
+import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
+import static com.github.artyomcool.dante.StreamUtils.join;
+import static com.github.artyomcool.dante.TypeNames.*;
 import static javax.lang.model.element.Modifier.PROTECTED;
-import static javax.lang.model.util.ElementFilter.fieldsIn;
+import static javax.lang.model.element.Modifier.PUBLIC;
 
-public class DaoGenerator {
+public class DaoGenerator implements Generator {
 
-    private final static List<String> NOT_NULL_ANNOTATIONS = Arrays.asList(
-            "org.jetbrains.annotations.NotNull",
-            "javax.annotation.Nonnull",
-            "edu.umd.cs.findbugs.annotations.NonNull",
-            "android.support.annotation.NonNull"
-    );
+    private static final Class<com.github.artyomcool.dante.core.CompoundIndex> COMPOUND_INDEX_CLASS = com.github.artyomcool.dante.core.CompoundIndex.class;
 
-    private final static TypeName CURSOR_CLASS_NAME = ClassName.get("android.database", "Cursor");
-    private final static TypeName SQLITE_STATEMENT_CLASS_NAME = ClassName.get("android.database.sqlite", "SQLiteStatement");
-
+    private final EntityContext context;
     private final RegistryGenerator registryGenerator;
-    private final Element entity;
-    private final Entity annotation;
 
-    private final TypeName abstractDaoType;
-    private final TypeName listOfPropertiesType;
-    private final TypeName listOfCompoundIndexesType;
-    private final TypeName entityTypeName;
-    private final List<VariableElement> fields;
-    private final VariableElement idField;
-    private final String entityClassName;
-    private final String tableName;
-
-    public DaoGenerator(RegistryGenerator registryGenerator, Element entity) {
-        this.registryGenerator = registryGenerator;
-        this.entity = entity;
-
-        annotation = entity.getAnnotation(Entity.class);
-
-        entityClassName = entity.getSimpleName().toString();
-        tableName = registryGenerator.toTableName(entityClassName);
-
-        entityTypeName = TypeName.get(entity.asType());
-
-        TypeElement daoClass = registryGenerator.getAnnotationElement(annotation::dao);
-
-        int typesCount = daoClass.getTypeParameters().size();
-        if (typesCount == 0) {
-            abstractDaoType = ClassName.get(daoClass);
-        } else if (typesCount == 1) {
-            ClassName typeName = ClassName.get(daoClass);
-            abstractDaoType = ParameterizedTypeName.get(
-                    typeName,
-                    entityTypeName
-            );
-        } else {
-            throw new IllegalArgumentException("Dao class should have no more then one type parameter: " + daoClass);
-        }
-
-        listOfPropertiesType = ParameterizedTypeName.get(
-                ClassName.get(List.class),
-                ClassName.get(Property.class)
-        );
-        listOfCompoundIndexesType = ParameterizedTypeName.get(
-                ClassName.get(List.class),
-                ClassName.get(com.github.artyomcool.dante.core.CompoundIndex.class)
-        );
-
-        Stream<VariableElement> fieldsStream = fieldsStream((TypeElement) entity);
-        fields = fieldsStream
-                .filter(e -> !e.getModifiers().contains(Modifier.TRANSIENT) &&
-                        !e.getModifiers().contains(Modifier.STATIC))
-                .collect(Collectors.toList());
-
-        List<VariableElement> elementsWithId = fields.stream()
-                .filter(e -> e.getAnnotation(Id.class) != null)
-                .collect(Collectors.toList());
-
-        if (elementsWithId.isEmpty()) {
-            registryGenerator.codeGenError(entity, "No element with @Id annotation");
-            throw new IllegalArgumentException("Can't generate entity without id");
-        } else if (elementsWithId.size() > 1) {
-            registryGenerator.codeGenError(entity, "Multiple elements with @Id annotation");
-            throw new IllegalArgumentException("Can't generate entity with multiple ids");
-        } else {
-            idField = elementsWithId.get(0);
-        }
+    public DaoGenerator(RegistryGenerator generator, EntityContext context) {
+        this.registryGenerator = generator;
+        this.context = context;
     }
 
-    private Stream<VariableElement> fieldsStream(TypeElement entity) {
-        Types typeUtils = registryGenerator.getProcessingEnv().getTypeUtils();
-        Stream<VariableElement> stream = fieldsIn(entity.getEnclosedElements()).stream();
-        while (entity.getSuperclass().getKind() != TypeKind.NONE) {
-            entity = (TypeElement) typeUtils.asElement(entity.getSuperclass());
-            stream = Stream.concat(fieldsIn(entity.getEnclosedElements()).stream(), stream);
-        }
-        return stream;
-    }
-
-    public Element getEntity() {
-        return entity;
-    }
-
-    public String getTableName() {
-        return tableName;
-    }
-
-    public List<VariableElement> getFields() {
-        return fields;
-    }
-
-    public RegistryGenerator getRegistryGenerator() {
-        return registryGenerator;
-    }
-
-    public GeneratedDao generate() throws IOException {
+    public GenerationResult generate() {
         verifyIdStatement();
 
-        TypeSpec.Builder daoClass = TypeSpec.classBuilder(entityClassName + "_Dao_")
-                .addOriginatingElement(entity)
+        TypeSpec.Builder daoClass = TypeSpec.classBuilder(context.getClassName() + "_Dao_")
+                .addOriginatingElement(context.getElement())
                 .addModifiers(Modifier.PUBLIC)
-                .superclass(abstractDaoType)
-                .addField(genCacheField())
-                .addField(genIdField())
-                .addField(genFields())
+                .superclass(context.getAbstractDaoType())
                 .addField(genCompoundIndexes())
                 .addMethod(genConstructor())
                 .addMethod(genTableName())
-                .addMethod(genIdProperty())
-                .addMethod(genProperties())
                 .addMethod(genGetCompoundIndexes())
-                .addMethod(genCreateEntity())
                 .addMethod(genBind())
                 .addMethod(genBindId())
-                .addMethod(genUpdateRowId())
-                .addMethod(genGetFromCache())
-                .addMethod(genPutIntoCache())
-                .addMethod(genRemoveFromCache())
-                .addMethod(genClearCache());
+                .addMethod(genUpdateRowId());
 
         TypeSpec typeSpec = daoClass.build();
-        JavaFile file = JavaFile.builder(getPackage(entity), typeSpec)
-                .indent("    ")
-                .build();
-
-        file.writeTo(registryGenerator.getProcessingEnv().getFiler());
+        String packageName = getPackage(context.getElement());
 
         int maxVersion = getMaxVersion();
-        return new GeneratedDao(this, typeSpec, maxVersion);
+        return new GenerationResult(packageName, typeSpec, maxVersion);
     }
 
     private int getMaxVersion() {
-        int version = annotation.sinceVersion();
+        int version = context.getAnnotation().sinceVersion();
         OptionalInt max = IntStream.concat(
-                fields.stream().mapToInt(this::sinceVersion),
-                fields.stream().mapToInt(this::indexSince)).max();
+                context.getFields().stream().mapToInt(PropertyGenerationHelper::sinceVersion),
+                context.getFields().stream().mapToInt(PropertyGenerationHelper::indexSince)).max();
         if (max.isPresent()) {
             version = Math.max(version, max.getAsInt());
         }
         return version;
     }
 
-    private FieldSpec genIdField() {
-        return FieldSpec.builder(
-                ClassName.get(Property.class),
-                "id_",
-                Modifier.PRIVATE,
-                Modifier.FINAL
-        )
-                .initializer("$L", genIdInitializer())
-                .build();
-    }
-
-    private FieldSpec genFields() {
-        FieldSpec.Builder fields_ = FieldSpec.builder(
-                listOfPropertiesType,
-                "fields_",
-                Modifier.PRIVATE,
-                Modifier.FINAL
-        );
-
-        CodeBlock.Builder code = CodeBlock.builder()
-                .add("$T.asList(", Arrays.class);
-        code.indent();
-
-        join(fields,
-                field -> code.add(buildProperty(field)),
-                field -> code.add(",\n")
-        );
-
-        code.add("\n");
-        code.unindent();
-        code.add(")");
-        return fields_
-                .initializer(code.build())
-                .build();
-    }
-
     private FieldSpec genCompoundIndexes() {
         FieldSpec.Builder indexes_ = FieldSpec.builder(
-                listOfCompoundIndexesType,
+                listOf(COMPOUND_INDEX_CLASS),
                 "indexes_",
                 Modifier.PRIVATE,
                 Modifier.FINAL
         );
 
         List<CompoundIndex> indexes = new ArrayList<>();
-        CompoundIndex aCoumpoundIndex = entity.getAnnotation(CompoundIndex.class);
-        if (aCoumpoundIndex != null) {
-            indexes.add(aCoumpoundIndex);
+        CompoundIndex aCompoundIndex = context.getElement().getAnnotation(CompoundIndex.class);
+        if (aCompoundIndex != null) {
+            indexes.add(aCompoundIndex);
         }
-        CompoundIndexes aCompoundIndexes = entity.getAnnotation(CompoundIndexes.class);
+        CompoundIndexes aCompoundIndexes = context.getElement().getAnnotation(CompoundIndexes.class);
         if (aCompoundIndexes != null) {
             indexes.addAll(Arrays.asList(aCompoundIndexes.value()));
         }
@@ -276,40 +131,6 @@ public class DaoGenerator {
                 .build();
     }
 
-    private <E> void join(Iterable<E> iterable, Consumer<E> action, Consumer<E> between) {
-        Spliterator<E> spliterator = iterable.spliterator();
-
-        spliterator.tryAdvance(action);
-        spliterator.forEachRemaining(between.andThen(action));
-    }
-
-    private CodeBlock genIdInitializer() {
-        return CodeBlock.builder()
-                .add("new $T()", Property.Builder.class).indent().indent()
-                .add("\n.columnName($S)", columnName(idField))
-                .add("\n.columnType($S)", columnType(idField))
-                .add("\n.columnExtraDefinition($S)", idExtraDefinition(idField))
-                .add("\n.build()").unindent().unindent()
-                .build();
-    }
-
-    private CodeBlock buildProperty(VariableElement field) {
-        if (field.getAnnotation(Id.class) != null) {
-            return CodeBlock.builder().add("id_").build();
-        }
-
-        return CodeBlock.builder()
-                .add("new $T()", Property.Builder.class).indent().indent()
-                .add("\n.sinceVersion($L)", sinceVersion(field))
-                .add("\n.columnName($S)", columnName(field))
-                .add("\n.columnType($S)", columnType(field))
-                .add("\n.columnExtraDefinition($S)", extraDefinition(field))
-                .add("\n.defaultValue($S)", defaultValue(field))
-                .add("\n.index($L, $S, $L)", indexSince(field), indexName(field), indexUnique(field))
-                .add("\n.build()").unindent().unindent()
-                .build();
-    }
-
     private CodeBlock buildIndex(CompoundIndex index) {
         CodeBlock.Builder builder = CodeBlock.builder()
                 .add("new $T()", com.github.artyomcool.dante.core.CompoundIndex.Builder.class).indent().indent()
@@ -321,96 +142,11 @@ public class DaoGenerator {
             int fieldIndex = fieldIndex(field.name());
             boolean isDesc = field.order() == Field.Sort.DESC;
 
-            builder.add("\n.property(fields_.get($L), $L)", fieldIndex, isDesc);
+            builder.add("\n.property(getEntityInfo().getProperties().get($L), $L)", fieldIndex, isDesc);
         }
 
         return builder.add("\n.build()").unindent().unindent()
                 .build();
-    }
-
-    private int sinceVersion(VariableElement field) {
-        SinceVersion annotation = field.getAnnotation(SinceVersion.class);
-        return annotation == null ? 1 : annotation.value();
-    }
-
-    private String columnName(VariableElement field) {
-        return registryGenerator.toTableName(field.getSimpleName().toString());
-    }
-
-    private String columnType(VariableElement field) {
-        TypeName fieldTypeName = TypeName.get(field.asType());
-        if (isString(fieldTypeName)) {
-            return "TEXT";
-        }
-
-        if (isByteArray(fieldTypeName)) {
-            return "BLOB";
-        }
-
-        try {
-            fieldTypeName = fieldTypeName.unbox();
-        } catch (UnsupportedOperationException ignored) {
-        }
-
-        if (fieldTypeName.isPrimitive()) {
-            if (fieldTypeName == TypeName.FLOAT || fieldTypeName == TypeName.DOUBLE) {
-                return "REAL";
-            }
-            return "INTEGER";
-        }
-
-        registryGenerator.codeGenError(field, "Unsupported field type");
-        throw new IllegalArgumentException("Unsupported field type: " + fieldTypeName);
-    }
-
-    private String idExtraDefinition(VariableElement field) {
-        Id idAnnotation = field.getAnnotation(Id.class);
-        boolean autoIncrement = !idAnnotation.preventAutoincrement() && isPrimitiveOrWrapper(field);
-        if (autoIncrement) {
-            return "PRIMARY KEY AUTOINCREMENT";
-        } else {
-            return "PRIMARY KEY";
-        }
-    }
-
-    private String extraDefinition(VariableElement field) {
-        return isNullable(field) ? "" : "NOT NULL";
-    }
-
-    private String defaultValue(VariableElement field) {
-        Optional<String> sinceDefault = getSinceDefault(field);
-        if (sinceDefault.isPresent()) {
-            return sinceDefault.get();
-        }
-        if (field.asType().getKind().isPrimitive()) {
-            return "0";
-        }
-        return isNullable(field) ? "NULL" : "''";
-    }
-
-    private int indexSince(VariableElement field) {
-        Index index = field.getAnnotation(Index.class);
-        if (index == null) {
-            return Property.NO_INDEX;
-        }
-        return index.sinceVersion();
-    }
-
-    private String indexName(VariableElement field) {
-        Index index = field.getAnnotation(Index.class);
-        if (index == null) {
-            return "";
-        }
-        String indexName = index.name();
-        if (indexName.isEmpty()) {
-            return "IDX_" + columnName(field);
-        }
-        return indexName;
-    }
-
-    private boolean indexUnique(VariableElement field) {
-        Index index = field.getAnnotation(Index.class);
-        return index != null && index.unique();
     }
 
     private String indexName(CompoundIndex index) {
@@ -421,43 +157,33 @@ public class DaoGenerator {
         StringBuilder result = new StringBuilder("IDX");
 
         for (Field field : index.fields()) {
-            result.append("_")
-                    .append(columnName(fieldByName(field.name())));
+            Optional<String> optional = context.columnName(field.name());
+            if (optional.isPresent()) {
+                result.append("_")
+                        .append(optional.get());
+            } else {
+                result.append("_Field '").append(field.name()).append("' not found");
+
+                registryGenerator.codeGenError(context.getElement(), "Field '" + field.name() + "' not found");
+            }
         }
 
         return result.toString();
     }
 
-    private Optional<String> getSinceDefault(VariableElement field) {
-        SinceVersion sinceVersion = field.getAnnotation(SinceVersion.class);
-        if (sinceVersion == null) {
-            return Optional.empty();
-        }
-        String defaultValue = sinceVersion.defaultValue();
-        if (defaultValue.equals(SinceVersion.NOT_SPECIFIED)) {
-            return Optional.empty();
-        }
-        return Optional.of(defaultValue);
-    }
-
-    private boolean isPrimitiveOrWrapper(VariableElement field) {
-        TypeName fieldTypeName = TypeName.get(field.asType());
-        return fieldTypeName.isPrimitive() || isPrimitiveWrapper(fieldTypeName);
-    }
-
     private MethodSpec genBind() {
         MethodSpec.Builder methodBuilder = implement(PROTECTED, "bind")
-                .addParameter(entityTypeName, "entity")
-                .addParameter(SQLITE_STATEMENT_CLASS_NAME, "statement");
+                .addParameter(context.getTypeName(), "e")
+                .addParameter(TypeNames.SQLITE_STATEMENT_CLASS, "statement");
         int index = 1;
-        for (VariableElement field : fields) {
-            if (field == idField) {
-                methodBuilder.addStatement("bindId(entity, statement, $L)", index++);
+        for (VariableElement field : context.getFields()) {
+            if (field == context.getIdField()) {
+                methodBuilder.addStatement("bindId(e, statement, $L)", index++);
                 continue;
             }
             CodeBlock.Builder builder = CodeBlock.builder();
             builder.add("{\n").indent();
-            builder.addStatement("$T value = entity.$L", field.asType(), field.getSimpleName());
+            builder.addStatement("$T value = e.$L", field.asType(), field.getSimpleName());
             builder.add(bindProperty(field, index++));
             builder.unindent().add("}\n");
 
@@ -468,14 +194,15 @@ public class DaoGenerator {
 
     private MethodSpec genBindId() {
         MethodSpec.Builder methodBuilder = implement(PROTECTED, "bindId")
-                .addParameter(entityTypeName, "entity")
-                .addParameter(SQLITE_STATEMENT_CLASS_NAME, "statement")
+                .addParameter(context.getTypeName(), "e")
+                .addParameter(TypeNames.SQLITE_STATEMENT_CLASS, "statement")
                 .addParameter(Integer.TYPE, "index");
 
+        VariableElement idField = context.getIdField();
         TypeName typeName = ClassName.get(idField.asType());
         Name fieldName = idField.getSimpleName();
 
-        methodBuilder.addStatement("$T value = entity.$L", typeName, fieldName);
+        methodBuilder.addStatement("$T value = e.$L", typeName, fieldName);
 
         if (isString(typeName)) {
             methodBuilder.addStatement("statement.bindString(index, value)");
@@ -530,9 +257,10 @@ public class DaoGenerator {
 
     private MethodSpec genUpdateRowId() {
         MethodSpec.Builder methodBuilder = implement(PROTECTED, "updateRowId")
-                .addParameter(entityTypeName, "entity")
+                .addParameter(context.getTypeName(), "e")
                 .addParameter(TypeName.LONG, "rowId");
 
+        VariableElement idField = context.getIdField();
         Name fieldName = idField.getSimpleName();
 
         if (isPrimitiveOrWrapper(idField)) {
@@ -541,172 +269,10 @@ public class DaoGenerator {
             String value = typeName.equals(TypeName.BOOLEAN)
                     ? "rowId != 0"
                     : "(" + typeName + ") rowId";
-            methodBuilder.addStatement("entity.$L = $L", fieldName, value);
+            methodBuilder.addStatement("e.$L = $L", fieldName, value);
         }
 
         return methodBuilder.build();
-    }
-
-
-    private FieldSpec genCacheField() {
-        TypeMirror typeMirror = idField.asType();
-        TypeName typeName = tryUnwrap(ClassName.get(typeMirror));
-        switch (typeName.toString()) {
-            case "boolean":
-            case "float":
-            case "double":
-            case "byte[]":
-                throw new UnsupportedOperationException("Not implemented yet");
-            case "byte":
-            case "int":
-            case "short":
-            case "long":
-            case "char":
-                TypeName fieldType = ParameterizedTypeName.get(
-                        ClassName.get(LongWeakValueIdentityHashMap.class),
-                        entityTypeName
-                );
-                return FieldSpec.builder(fieldType, "cache", Modifier.PRIVATE, Modifier.FINAL)
-                        .initializer("new $T<>()", LongWeakValueIdentityHashMap.class)
-                        .build();
-            case "java.lang.String":
-                fieldType = ParameterizedTypeName.get(
-                        ClassName.get(ObjectWeakValueIdentityHashMap.class),
-                        ClassName.get(String.class),
-                        entityTypeName
-                );
-                return FieldSpec.builder(fieldType, "cache", Modifier.PRIVATE, Modifier.FINAL)
-                        .initializer("new $T<>()", ObjectWeakValueIdentityHashMap.class)
-                        .build();
-            default:
-                registryGenerator.codeGenError(idField, "Unsupported type");
-                throw new IllegalArgumentException("Unsupported type: " + typeName);
-        }
-    }
-
-    private MethodSpec genGetFromCache() {
-        MethodSpec.Builder methodBuilder = implement(PROTECTED, entityTypeName, "getFromCache")
-                .addParameter(CURSOR_CLASS_NAME, "cursor")
-                .addParameter(TypeName.INT, "index");
-
-        TypeMirror typeMirror = idField.asType();
-        TypeName typeName = tryUnwrap(ClassName.get(typeMirror));
-        switch (typeName.toString()) {
-            case "boolean":
-                throw new UnsupportedOperationException("Not implemented yet");
-            case "byte":
-            case "int":
-            case "char":
-                methodBuilder.addStatement("return cache.get(cursor.getInt(index))");
-                break;
-            case "short":
-                methodBuilder.addStatement("return cache.get(cursor.getShort(index))");
-                break;
-            case "long":
-                methodBuilder.addStatement("return cache.get(cursor.getLong(index))");
-                break;
-            case "float":
-                methodBuilder.addStatement("return cache.get(cursor.getFloat(index))");
-                break;
-            case "double":
-                methodBuilder.addStatement("return cache.get(cursor.getDouble(index))");
-                break;
-            case "byte[]":
-                methodBuilder.addStatement("return cache.get(cursor.getBlob(index))");
-                break;
-            case "java.lang.String":
-                methodBuilder.addStatement("return cache.get(cursor.getString(index))");
-                break;
-            default:
-                registryGenerator.codeGenError(idField, "Unsupported type");
-                throw new IllegalArgumentException("Unsupported type: " + typeName);
-        }
-        return methodBuilder.build();
-    }
-
-    private MethodSpec genPutIntoCache() {
-        MethodSpec.Builder methodBuilder = implement(PROTECTED, "putIntoCache")
-                .addParameter(entityTypeName, "entity");
-
-        methodBuilder.addStatement("cache.put(entity.$L, entity)", idField.getSimpleName());
-
-        return methodBuilder.build();
-    }
-
-    private MethodSpec genRemoveFromCache() {
-        MethodSpec.Builder methodBuilder = implement(PROTECTED, "removeFromCache")
-                .addParameter(entityTypeName, "entity");
-
-        methodBuilder.addStatement("cache.remove(entity.$L)", idField.getSimpleName());
-
-        return methodBuilder.build();
-    }
-
-    private MethodSpec genClearCache() {
-        MethodSpec.Builder methodBuilder = implement(PROTECTED, "clearCache");
-
-        methodBuilder.addStatement("cache.removeAll()");
-
-        return methodBuilder.build();
-    }
-
-    private MethodSpec genCreateEntity() {
-        MethodSpec.Builder methodBuilder = implement(PROTECTED, entityTypeName, "createEntity")
-                .addParameter(CURSOR_CLASS_NAME, "cursor");
-        methodBuilder.addStatement("$T entity = new $T()", entityTypeName, entityTypeName);
-        int index = 0;
-        for (VariableElement field : fields) {
-            Statement statement = readProperty(field, index++);
-            methodBuilder.addStatement(statement.getCode(), statement.getArgs());
-        }
-        methodBuilder.addStatement("return entity");
-        return methodBuilder.build();
-    }
-
-    private Statement readProperty(VariableElement field, int index) {
-        Name fieldName = field.getSimpleName();
-        TypeMirror typeMirror = field.asType();
-        TypeName typeName = ClassName.get(typeMirror);
-        switch (typeName.toString()) {
-            case "boolean":
-                return new Statement("entity.$L = cursor.getInt($L) != 0", fieldName, index);
-            case "java.lang.Boolean":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : (cursor.getInt($L) != 0)", fieldName, index, index);
-            case "byte":
-                return new Statement("entity.$L = (byte) cursor.getInt($L)", fieldName, index);
-            case "java.lang.Byte":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : (byte) cursor.getInt($L)", fieldName, index, index);
-            case "short":
-                return new Statement("entity.$L = cursor.getShort($L)", fieldName, index);
-            case "java.lang.Short":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : cursor.getShort($L)", fieldName, index, index);
-            case "int":
-                return new Statement("entity.$L = cursor.getInt($L)", fieldName, index);
-            case "java.lang.Integer":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : cursor.getInt($L)", fieldName, index, index);
-            case "long":
-                return new Statement("entity.$L = cursor.getLong($L)", fieldName, index);
-            case "java.lang.Long":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : cursor.getLong($L)", fieldName, index, index);
-            case "char":
-                return new Statement("entity.$L = (char) cursor.getInt($L)", fieldName, index);
-            case "java.lang.Character":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : (char) cursor.getInt($L)", fieldName, index, index);
-            case "float":
-                return new Statement("entity.$L = cursor.getFloat($L)", fieldName, index);
-            case "java.lang.Float":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : cursor.getFloat($L)", fieldName, index, index);
-            case "double":
-                return new Statement("entity.$L = cursor.getDouble($L)", fieldName, index);
-            case "java.lang.Double":
-                return new Statement("entity.$L = cursor.isNull($L) ? null : cursor.getDouble($L)", fieldName, index, index);
-            case "byte[]":
-                return new Statement("entity.$L = cursor.getBlob($L)", fieldName, index);
-            case "java.lang.String":
-                return new Statement("entity.$L = cursor.getString($L)", fieldName, index);
-        }
-        registryGenerator.codeGenError(field, "Unsupported type");
-        throw new IllegalArgumentException("Unsupported type: " + typeName);
     }
 
     private CodeBlock bindProperty(VariableElement field, int index) {
@@ -783,10 +349,13 @@ public class DaoGenerator {
                         .build();
         }
         registryGenerator.codeGenError(field, "Unsupported type");
+        //TODO do not throw
         throw new IllegalArgumentException("Unsupported type: " + typeName);
     }
 
     private void verifyIdStatement() {
+        Element idField = context.getIdField();
+
         Id annotation = idField.getAnnotation(Id.class);
 
         TypeName typeName = TypeName.get(idField.asType());
@@ -822,74 +391,39 @@ public class DaoGenerator {
     }
 
     private MethodSpec genTableName() {
-        return implement(PROTECTED, String.class, "getTableName")
+        String tableName = context.getTableName();
+        return implement(PUBLIC, String.class, "getTableName")
                 .addStatement("return $S", tableName)
                 .build();
     }
 
-    private MethodSpec genIdProperty() {
-        return implement(PROTECTED, Property.class, "getIdProperty")
-                .addStatement("return id_")
-                .build();
-    }
-
-    private MethodSpec genProperties() {
-        return implement(PROTECTED, listOfPropertiesType, "getProperties")
-                .addStatement("return fields_")
-                .build();
-    }
-
     private MethodSpec genGetCompoundIndexes() {
-        return implement(PROTECTED, listOfCompoundIndexesType, "getCompoundIndexes")
+        return implement(PROTECTED, listOf(COMPOUND_INDEX_CLASS), "getCompoundIndexes")
                 .addStatement("return indexes_")
                 .build();
-    }
-
-    private boolean isNullable(VariableElement field) {
-        if (field.asType().getKind().isPrimitive()) {
-            return false;
-        }
-        for (AnnotationMirror annotation : field.getAnnotationMirrors()) {
-            String typeName = ClassName.get(annotation.getAnnotationType()).toString();
-            if (NOT_NULL_ANNOTATIONS.contains(typeName)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private MethodSpec.Builder implement(Modifier modifier, String name) {
-        return implement(modifier, TypeName.VOID, name);
-    }
-
-    private MethodSpec.Builder implement(Modifier modifier, Class<?> returns, String name) {
-        return implement(modifier, TypeName.get(returns), name);
-    }
-
-    private MethodSpec.Builder implement(Modifier modifier, TypeName returns, String name) {
-        return MethodSpec.methodBuilder(name)
-                .addAnnotation(Override.class)
-                .addModifiers(modifier)
-                .returns(returns);
     }
 
     private MethodSpec genConstructor() {
         return MethodSpec.constructorBuilder()
                 .addModifiers(Modifier.PUBLIC)
-                .addParameter(sqliteDatabase(), "db")
-                .addStatement("super(db, $L)", annotation.sinceVersion())
+                .addParameter(TypeNames.SQLITE_DATABASE_CLASS, "db")
+                .addParameter(parametrize(EntityInfo.class, context.getTypeName()), "info")
+                .addStatement("super(db, info, $L)", context.getAnnotation().sinceVersion())
                 .build();
     }
 
     private VariableElement fieldByName(String name) {
-        return fields.stream()
+        Optional<VariableElement> result = context.getFields().stream()
                 .filter(variableElement -> variableElement.getSimpleName().toString().equals(name))
-                .findAny()
+                .findAny();
+
+        //TODO no throw
+        return result
                 .orElseThrow(() -> new IllegalArgumentException("Field with name " + name + " not found"));
     }
 
     private int fieldIndex(String name) {
-        return fields.indexOf(fieldByName(name));
+        return context.getFields().indexOf(fieldByName(name));
     }
 
 }

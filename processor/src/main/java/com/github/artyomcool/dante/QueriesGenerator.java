@@ -22,8 +22,12 @@
 
 package com.github.artyomcool.dante;
 
-import com.github.artyomcool.dante.annotation.Queries;
+import com.github.artyomcool.dante.annotation.DbQueries;
 import com.github.artyomcool.dante.annotation.Query;
+import com.github.artyomcool.dante.core.Registry;
+import com.github.artyomcool.dante.core.query.DbQueriesBase;
+import com.github.artyomcool.dante.core.query.EntityIteratorFactory;
+import com.github.artyomcool.dante.core.query.QueryImpl;
 import com.squareup.javapoet.*;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -35,79 +39,85 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.Callable;
 
 import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
+import static com.github.artyomcool.dante.TypeNames.parametrize;
 import static javax.lang.model.util.ElementFilter.methodsIn;
 
 public class QueriesGenerator {
 
     private final RegistryGenerator generator;
     private final Element queries;
-    private final TypeElement entity;
-    private final Map<String, GeneratedDao> generatedEntities;
+    private final Map<String, EntityContext> generatedEntities;
 
-    public QueriesGenerator(RegistryGenerator generator, Element queries, Map<String, GeneratedDao> generatedDao) {
+    public QueriesGenerator(RegistryGenerator generator, Element queries, Map<String, EntityContext> entities) {
         this.generator = generator;
         this.queries = queries;
-        this.generatedEntities = generatedDao;
-
-        Queries annotation = queries.getAnnotation(Queries.class);
-        entity = generator.getAnnotationElement(annotation::value);
+        this.generatedEntities = entities;
     }
 
-    public GeneratedDao getDao() {
-        return generatedEntities.get(getEntityClassName());
-    }
-
-    public Element getQueriesElement() {
-        return queries;
-    }
-
-    private String getEntityClassName() {
-        return entity.asType().toString();
-    }
-
-    public GeneratedQuery generate() throws IOException {
-        GeneratedDao generatedDao = getDao();
-        TypeName dao = generatedDao.getDao();
-
-        boolean isInterface;
-        switch (queries.getKind()) {
-            case INTERFACE:
-                isInterface = true;
-                break;
-            case CLASS:
-                isInterface = false;
-                break;
-            default:
-                throw new IllegalArgumentException("Class or interface expected, found " + queries);
-        }
+    public QueryGenerationResult generate() {
         TypeName queriesTypeName = TypeName.get(queries.asType());
         TypeSpec.Builder spec = TypeSpec.classBuilder(queries.getSimpleName() + "_Impl_")
+                .superclass(DbQueriesBase.class)
+                .addSuperinterface(queriesTypeName)
                 .addOriginatingElement(queries)
                 .addModifiers(Modifier.PUBLIC)
-                .addField(dao, "dao", Modifier.PRIVATE, Modifier.FINAL);
+                .addMethod(MethodSpec.constructorBuilder()
+                        .addModifiers(Modifier.PUBLIC)
+                        .addParameter(TypeNames.SQLITE_DATABASE_CLASS, "db")
+                        .addParameter(Registry.class, "registry")
+                        .addStatement("super(db, registry)")
+                        .build());
 
-        if (isInterface) {
-            spec.addSuperinterface(queriesTypeName);
-        } else {
-            spec.superclass(queriesTypeName);
-        }
-
-        spec.addMethod(MethodSpec.constructorBuilder()
-                .addModifiers(Modifier.PUBLIC)
-                .addParameter(dao, "dao")
-                .addStatement("this.dao = $L", "dao")
-                .build());
+        List<MethodSpec> methods = new ArrayList<>();
+        List<FieldSpec> fields = new ArrayList<>();
 
         methodsIn(queries.getEnclosedElements()).forEach(e -> {
             Query query = e.getAnnotation(Query.class);
+            TypeMirror entityType = getEntityType(e.getReturnType());
+
+            TypeMirror rawFactory;
+            try {
+                query.factory();
+                throw new IllegalStateException("MirroredTypeException expected");
+            } catch (MirroredTypeException ex) {
+                rawFactory = ex.getTypeMirror();
+            }
+            if (rawFactory.toString().equals(EntityIteratorFactory.class.getName())) {
+                try {
+                    queries.getAnnotation(DbQueries.class).factory();
+                    throw new IllegalStateException("MirroredTypeException expected");
+                } catch (MirroredTypeException ex) {
+                    rawFactory = ex.getTypeMirror();
+                }
+            }
+
+            boolean needParametrize;
+            if (rawFactory instanceof DeclaredType) {
+                List<? extends TypeMirror> typeArguments = ((DeclaredType) rawFactory).getTypeArguments();
+                switch (typeArguments.size()) {
+                    case 0:
+                        needParametrize = false;
+                        break;
+                    case 1:
+                        needParametrize = true;
+                        break;
+                    default:
+                        generator.codeGenError(e, "Wrong type params count: " + rawFactory);
+                        needParametrize = false;
+                        break;
+                }
+            } else {
+                needParametrize = false;
+            }
+            TypeName factory = needParametrize ? parametrize(rawFactory, TypeName.get(entityType)) : TypeName.get(rawFactory);
 
             String where = query.where();
 
@@ -122,24 +132,12 @@ public class QueriesGenerator {
 
                 private String referenceName;
 
-                private GeneratedDao getGeneratedDao(String referenceName) {
-                    GeneratedDao dao = generatedEntities.get(referenceName);
-                    if (dao == null) {
-                        String aPackage = getPackage(queries);
-                        if (!aPackage.isEmpty()) {
-                            dao = generatedEntities.get(aPackage + "." + referenceName);
-                        }
-                    }
-                    return dao;
-                }
-
                 @Override
                 public void enterTable_name(SQLiteParser.Table_nameContext ctx) {
                     referenceName = ctx.getText();
-                    String currentTableName = this.referenceName;
-                    GeneratedDao dao = getGeneratedDao(currentTableName);
+                    EntityContext dao = getEntityContext(referenceName);
                     if (dao == null) {
-                        generator.codeGenError(e, "Can't find an dao with name " + currentTableName);
+                        generator.codeGenError(e, "Can't find an dao with name " + referenceName);
                         return;
                     }
                     String tableName = dao.getTableName();
@@ -153,17 +151,19 @@ public class QueriesGenerator {
 
                 @Override
                 public void enterColumn_name(SQLiteParser.Column_nameContext ctx) {
-                    String referenceName = this.referenceName == null ? getEntityClassName() : this.referenceName;
-                    GeneratedDao dao = getGeneratedDao(referenceName);
-                    if (dao == null) {
-                        generator.codeGenError(e, "Can't find the dao with name " + referenceName);
+                    String referenceName = this.referenceName == null ? getEntityClassName(entityType) : this.referenceName;
+                    EntityContext entity = getEntityContext(referenceName);
+                    if (entity == null) {
+                        generator.codeGenError(e, "Can't find the entity with name " + referenceName);
                         return;
                     }
-                    try {
-                        String columnName = dao.getColumnName(ctx.getText());
-                        replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), columnName));
-                    } catch (NoSuchElementException ex) {
-                        generator.codeGenError(e, "Can't find a column " + ctx.getText() + " in dao with name " + referenceName);
+
+                    Optional<String> replacement = entity.columnName(ctx.getText());
+                    if (replacement.isPresent()) {
+                        replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), "\"" +replacement.get() + "\""));
+                    } else {
+                        //TODO allow direct references
+                        generator.codeGenError(e, "Can't find a column " + ctx.getText() + " in entity with name " + referenceName);
                     }
                 }
 
@@ -178,83 +178,129 @@ public class QueriesGenerator {
                 }
             }, parser.parse());
 
-            StringBuilder builder = new StringBuilder();
+            StringBuilder whereBuilder = new StringBuilder();
             int start = 0;
             for (TextReplacement replacement : replacements) {
-                builder.append(where.substring(start, replacement.start));
-                builder.append(replacement.replacement);
+                whereBuilder.append(where.substring(start, replacement.start));
+                whereBuilder.append(replacement.replacement);
                 start = replacement.stop + 1;
             }
-            builder.append(where.substring(start));
+            whereBuilder.append(where.substring(start));
+
+            TypeName fieldType = parametrize(QueryImpl.class, TypeName.get(entityType));
+            String methodName = e.getSimpleName().toString();
+            FieldSpec field = FieldSpec.builder(fieldType, methodName, Modifier.PRIVATE, Modifier.FINAL)
+                    .initializer("create(new $T(getDb(), reader($T.class), query($T.class, $S)))", factory, entityType, entityType, whereBuilder)
+                    .build();
 
             //TODO remove Query annotation
             MethodSpec.Builder statementBuilder = MethodSpec.overriding(e)
-                    .addStatement("final String where = $S", builder)
-                    .addCode("\n")
-                    .addStatement("final String[] params = new String[$L]", paramReplacements.size());
+                    .addStatement("final Object[] params = new Object[$L]", paramReplacements.size());
 
             int i = 0;
             for (ParamReplacement replacement : paramReplacements) {
-                statementBuilder.addStatement("params[$L] = String.valueOf($L)", i++, replacement.paramName);
+                statementBuilder.addStatement("params[$L] = $L", i++, replacement.paramName);
             }
 
             MethodSpec methodSpec = statementBuilder
                     .addCode("\n")
-                    .addCode(queryReturn(e.getReturnType()))
+                    .addCode(queryReturn(e.getReturnType(), methodName))
                     .build();
 
-            spec.addMethod(methodSpec);
+            fields.add(field);
+            methods.add(methodSpec);
         });
 
+        fields.forEach(spec::addField);
+        methods.forEach(spec::addMethod);
+
         TypeSpec typeSpec = spec.build();
-        JavaFile file = JavaFile.builder(getPackage(queries), typeSpec)
-                .indent("    ")
-                .build();
 
-        file.writeTo(generator.getProcessingEnv().getFiler());
-
-        return new GeneratedQuery(this, typeSpec);
+        String packageName = getPackage(queries);
+        GenerationResult generationResult = new GenerationResult(packageName, typeSpec, 0);
+        return new QueryGenerationResult(generationResult, queriesTypeName);
     }
 
-    private CodeBlock queryReturn(TypeMirror returnType) {
+    private TypeMirror getEntityType(TypeMirror returnType) {
+        if (isObservable(returnType)) {
+            return getEntityType(getFirstGenericArg(returnType));
+        }
+        if (isIterable(returnType)) {
+            return getFirstGenericArg(returnType);
+        }
+        return returnType;
+    }
+
+    private TypeMirror getFirstGenericArg(TypeMirror returnType) {
+        returnType = ((DeclaredType) returnType).getTypeArguments().get(0);
+        return returnType;
+    }
+
+    private CodeBlock queryReturn(TypeMirror returnType, String methodName) {
         CodeBlock.Builder builder = CodeBlock.builder();
 
+        if (isObservable(returnType)) {
+            TypeMirror wrappedType = getFirstGenericArg(returnType);
+            TypeName callableParam = TypeName.get(wrappedType);
+            TypeName callableType = parametrize(Callable.class, callableParam);
+            TypeSpec callable = TypeSpec.anonymousClassBuilder("")
+                    .superclass(callableType)
+                    .addMethod(
+                            MethodSpec.methodBuilder("call")
+                                    .addAnnotation(Override.class)
+                                    .addModifiers(Modifier.PUBLIC)
+                                    .returns(callableParam)
+                                    .addCode(queryReturn(wrappedType, methodName))
+                                    .build()
+                    )
+                    .build();
+            builder.addStatement("return $T.fromCallable($L)", Observable.class, callable);
+        } else if (isIterable(returnType)) {
+            builder.addStatement("return $L.queryList(params)", methodName);
+        } else {
+            builder.addStatement("return $L.queryUnique(params)", methodName);
+        }
+        return builder.build();
+    }
+
+    private boolean isObservable(TypeMirror returnType) {
         Types types = generator.getProcessingEnv().getTypeUtils();
         Elements elements = generator.getProcessingEnv().getElementUtils();
 
         TypeElement typeElement = elements.getTypeElement(Observable.class.getName());
-        if (typeElement != null) {
-            TypeMirror observableMirror = typeElement.asType();
+        if (typeElement == null) {
+            return false;
+        }
+        TypeMirror observableMirror = types.erasure(typeElement.asType());
 
-            if (types.isAssignable(types.erasure(returnType), observableMirror)) {
-                TypeMirror internalReturnType = ((DeclaredType) returnType).getTypeArguments().get(0);
-                TypeName callableType = ParameterizedTypeName.get(
-                        ClassName.get(Callable.class),
-                        ClassName.get(internalReturnType)
-                );
-                TypeSpec callable = TypeSpec.anonymousClassBuilder("")
-                        .superclass(callableType)
-                        .addMethod(
-                                MethodSpec.methodBuilder("call")
-                                        .addAnnotation(Override.class)
-                                        .addModifiers(Modifier.PUBLIC)
-                                        .returns(ClassName.get(internalReturnType))
-                                        .addCode(queryReturn(internalReturnType))
-                                        .build()
-                        )
-                        .build();
-                builder.addStatement("return $T.fromCallable($L)", Observable.class, callable);
-                return builder.build();
+        TypeMirror erasure = types.erasure(returnType);
+        return erasure.equals(observableMirror);
+    }
+
+    private boolean isIterable(TypeMirror returnType) {
+        Types types = generator.getProcessingEnv().getTypeUtils();
+        Elements elements = generator.getProcessingEnv().getElementUtils();
+
+        TypeMirror iterableMirror = elements.getTypeElement(List.class.getName()).asType();
+        return types.isAssignable(iterableMirror, types.erasure(returnType));
+    }
+
+    private EntityContext getEntityContext(String referenceName) {
+        EntityContext dao = generatedEntities.get(referenceName);
+        if (dao == null) {
+            String aPackage = getPackage(queries);
+            if (!aPackage.isEmpty()) {
+                dao = generatedEntities.get(aPackage + "." + referenceName);
             }
         }
+        return dao;
+    }
 
-        TypeMirror iterableMirror = elements.getTypeElement(Iterable.class.getName()).asType();
-        if (types.isAssignable(types.erasure(returnType), iterableMirror)) {
-            builder.addStatement("return dao.selectList(where, params)");
-        } else {
-            builder.addStatement("return dao.selectUnique(where, params)");
-        }
-        return builder.build();
+    private String getEntityClassName(TypeMirror type) {
+        Types typeUtils = generator.getProcessingEnv().getTypeUtils();
+        Element element = typeUtils.asElement(type);
+
+        return element.getSimpleName().toString();
     }
 
     private static class TextReplacement {
@@ -284,4 +330,25 @@ public class QueriesGenerator {
             return Integer.compare(start, o.start);
         }
     }
+
+    public static class QueryGenerationResult {
+
+        private final GenerationResult generationResult;
+        private final TypeName interfaceName;
+
+        public QueryGenerationResult(GenerationResult generationResult, TypeName interfaceName) {
+            this.generationResult = generationResult;
+            this.interfaceName = interfaceName;
+        }
+
+        public GenerationResult getGenerationResult() {
+            return generationResult;
+        }
+
+        public TypeName getInterfaceName() {
+            return interfaceName;
+        }
+
+    }
+
 }

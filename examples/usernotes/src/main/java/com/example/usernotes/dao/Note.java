@@ -1,10 +1,9 @@
 package com.example.usernotes.dao;
 
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
+import com.github.artyomcool.dante.annotation.DbQueries;
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Id;
-import com.github.artyomcool.dante.annotation.Queries;
 import com.github.artyomcool.dante.annotation.Query;
 
 import java.util.List;
@@ -49,7 +48,7 @@ public class Note {
         return id;
     }
 
-    @Queries(Note.class)
+    @DbQueries
     public interface NoteQueries {
 
         @Query(where = "")

@@ -2,6 +2,9 @@ package com.example.usernotes;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.database.sqlite.SQLiteProgram;
+import android.database.sqlite.SQLiteQuery;
+import android.database.sqlite.SQLiteStatement;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -13,6 +16,9 @@ import com.example.usernotes.dao.Note;
 import com.github.artyomcool.dante.async.UiDaoTask;
 import com.github.artyomcool.dante.async.UiTaskCallback;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -66,6 +72,7 @@ public class MainActivity extends Activity {
         @Override
         public void onError(Throwable throwable) {
             Toast.makeText(MainActivity.this, "oups", Toast.LENGTH_SHORT).show();
+            throwable.printStackTrace();
         }
     };
 

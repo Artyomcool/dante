@@ -24,7 +24,7 @@ package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Migration;
-import com.github.artyomcool.dante.annotation.Queries;
+import com.github.artyomcool.dante.annotation.DbQueries;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.RoundEnvironment;
@@ -44,7 +44,7 @@ public class AnnotationProcessor extends AbstractProcessor {
 
     private static final List<Class<? extends Annotation>> SUPPORTED_ANNOTATIONS = Arrays.asList(
             Entity.class,
-            Queries.class,
+            DbQueries.class,
             Migration.class
     );
 

@@ -43,6 +43,7 @@ public class NoteActivity extends Activity {
             @Override
             public void onError(Throwable throwable) {
                 Toast.makeText(NoteActivity.this, "oups", Toast.LENGTH_SHORT).show();
+                throwable.printStackTrace();
             }
         });
 

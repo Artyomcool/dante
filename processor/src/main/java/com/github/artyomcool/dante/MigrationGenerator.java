@@ -1,14 +1,13 @@
 package com.github.artyomcool.dante;
 
 import com.github.artyomcool.dante.annotation.Migration.OnVersion;
-import com.github.artyomcool.dante.core.dao.Migration;
-import com.github.artyomcool.dante.core.dao.MigrationInfo;
+import com.github.artyomcool.dante.core.migration.Migration;
+import com.github.artyomcool.dante.core.migration.MigrationInfo;
 import com.squareup.javapoet.*;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -16,18 +15,16 @@ import static com.github.artyomcool.dante.RegistryGenerator.getPackage;
 
 public class MigrationGenerator {
 
-    private final RegistryGenerator registryGenerator;
     private final TypeElement element;
     private final ClassName type;
     private int version = 1;
 
-    public MigrationGenerator(RegistryGenerator registryGenerator, TypeElement element) {
-        this.registryGenerator = registryGenerator;
-        this.element = element;
-        this.type = ClassName.get(element);
+    public MigrationGenerator(Element element) {
+        this.element = (TypeElement) element;
+        this.type = ClassName.get(this.element);
     }
 
-    public GeneratedMigration generate() throws IOException {
+    public GenerationResult generate() {
 
         ParameterizedTypeName returnType = ParameterizedTypeName.get(List.class, Migration.class);
 
@@ -70,7 +67,7 @@ public class MigrationGenerator {
                         MethodSpec.methodBuilder("migrations")
                                 .addModifiers(Modifier.PUBLIC)
                                 .returns(returnType)
-                                .addParameter(ClassName.get("android.database.sqlite", "SQLiteDatabase"), "db", Modifier.FINAL)
+                                .addParameter(TypeNames.SQLITE_DATABASE_CLASS, "db", Modifier.FINAL)
                                 .addParameter(TypeName.INT, "onVersion")
                                 .addAnnotation(Override.class)
                                 .addCode(codeBuilder.build())
@@ -78,14 +75,7 @@ public class MigrationGenerator {
                 )
                 .build();
 
-        JavaFile file = JavaFile.builder(getPackage(element), typeSpec)
-                .indent("    ")
-                .build();
-
-        file.writeTo(registryGenerator.getProcessingEnv().getFiler());
-        ClassName className = ClassName.get(getPackage(element), typeSpec.name);
-        return new GeneratedMigration(className, version);
-
+        return new GenerationResult(getPackage(element), typeSpec, version);
     }
 
     private Collection<VersionMigrations> getMigrations() {

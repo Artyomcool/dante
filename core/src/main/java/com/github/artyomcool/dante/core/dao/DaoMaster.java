@@ -23,12 +23,16 @@
 package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
+import com.github.artyomcool.dante.core.EntityInfo;
 import com.github.artyomcool.dante.core.Property;
+import com.github.artyomcool.dante.core.db.DatabaseOpener;
+import com.github.artyomcool.dante.core.migration.Migration;
+import com.github.artyomcool.dante.core.migration.MigrationInfo;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class DaoMaster implements Registry {
+public class DaoMaster {
 
     private final DaoRegistry delegate;
     private final DatabaseOpener opener;
@@ -87,7 +91,7 @@ public class DaoMaster implements Registry {
     private void onUpgrade(SQLiteDatabase db) {
         db.beginTransaction();
         try {
-            List<? extends MigrationInfo> customMigrations = delegate.initCustomMigrations();
+            List<? extends MigrationInfo> customMigrations = delegate.createCustomMigrations();
             for (int i = db.getVersion() + 1; i <= delegate.getVersion(); i++) {
                 for (Migration migration : getMigrations(i)) {
                     migration.migrate();
@@ -115,7 +119,7 @@ public class DaoMaster implements Registry {
                     }
                 });
             } else {
-                for (final Property property : dao.getProperties()) {
+                for (final Property property : dao.getEntityInfo().getProperties()) {
                     if (property.getSinceVersion() == version) {
                         result.add(new Migration() {
                             @Override
@@ -138,14 +142,16 @@ public class DaoMaster implements Registry {
         return result;
     }
 
-    @Override
     public <T> T queries(Class<T> clazz) {
         return delegate.queries(clazz);
     }
 
-    @Override
     public <T> Dao<T> dao(Class<T> clazz) {
         return delegate.dao(clazz);
+    }
+
+    public <T> EntityInfo<T> entity(Class<T> clazz) {
+        return delegate.entity(clazz);
     }
 
     //TODO explain what android version has problem with multi-catch

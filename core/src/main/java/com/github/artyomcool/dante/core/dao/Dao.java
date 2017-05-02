@@ -22,19 +22,20 @@
 
 package com.github.artyomcool.dante.core.dao;
 
-import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteStatement;
 import com.github.artyomcool.dante.core.CompoundIndex;
+import com.github.artyomcool.dante.core.EntityInfo;
 import com.github.artyomcool.dante.core.Property;
+import com.github.artyomcool.dante.core.cashe.Cache;
+import com.github.artyomcool.dante.core.query.*;
 import net.jcip.annotations.NotThreadSafe;
 
 import javax.annotation.Nullable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
+
+import static com.github.artyomcool.dante.core.query.DbQueriesBase.allColumns;
 
 /**
  * Base class for all DAO. In most cases should be accessed through {@link DaoMaster#dao(Class)} with entity class.
@@ -47,16 +48,33 @@ import java.util.concurrent.Callable;
 @NotThreadSafe
 public abstract class Dao<E> {
 
-    private final StringBuilder tmp = new StringBuilder();
+    @SuppressWarnings("rawTypes")
+    private static final Cache NO_CACHE = new Cache() {
+        @Override
+        public Object get(Row row, int columnIndex) {
+            return null;
+        }
+
+        @Override
+        public void put(Object entity) {
+        }
+
+        @Override
+        public void remove(Object entity) {
+        }
+
+        @Override
+        public void clear() {
+        }
+    };
 
     private final SQLiteDatabase db;
 
     private final int sinceVersion;
 
-    private int idColumnIndex = -1;
+    private final EntityInfo<E> entityInfo;
 
-    @Nullable
-    private String selectQuery = null;
+    private final Cache<E> cache;
 
     @Nullable
     private SQLiteStatement insertStatement = null;
@@ -67,34 +85,30 @@ public abstract class Dao<E> {
     @Nullable
     private SQLiteStatement deleteByIdStatement = null;
 
-    protected Dao(SQLiteDatabase db, int sinceVersion) {
+    @Nullable
+    private QueryImpl<E> selectAllQuery = null;
+
+    protected Dao(SQLiteDatabase db, EntityInfo<E> entityInfo, int sinceVersion) {
         this.db = db;
+        this.entityInfo = entityInfo;
         this.sinceVersion = sinceVersion;
+        this.cache = notNull(entityInfo.getCache());
     }
 
-    protected abstract String getTableName();
+    @SuppressWarnings("unchecked")
+    private Cache<E> notNull(@Nullable Cache<E> entityInfo) {
+        return entityInfo == null ? NO_CACHE : entityInfo;
+    }
 
-    protected abstract List<Property> getProperties();
-
-    protected abstract Property getIdProperty();
+    public abstract String getTableName();
 
     protected abstract List<CompoundIndex> getCompoundIndexes();
-
-    protected abstract E createEntity(Cursor cursor);
 
     protected abstract void bind(E entity, SQLiteStatement statement);
 
     protected abstract void bindId(E entity, SQLiteStatement statement, int index);
 
     protected abstract void updateRowId(E entity, long rowId);
-
-    protected abstract E getFromCache(Cursor cursor, int idColumnIndex);
-
-    protected abstract void putIntoCache(E entity);
-
-    protected abstract void removeFromCache(E entity);
-
-    protected abstract void clearCache();
 
     /**
      * Returns DB version in which this field where presented. Used for automatic migration.
@@ -106,85 +120,30 @@ public abstract class Dao<E> {
     }
 
     /**
-     * Creates one entity from current row of cursor. In case the entity with the same id was already created,
-     * it will be just returned, without re-reading from cursor.
-     *
-     * @param cursor initialized cursor to perform reading values
-     * @return a new entity initialized from the cursor columns or the old entity with the same id
+     * Returns {@link EntityInfo} of this dao.
+     * In most cases there is no need to call it directly outside of generated code.
+     * @return EntityInfo of this dao
      */
-    public E fromCursor(Cursor cursor) {
-        E result = getFromCache(cursor, getIdColumnIndex());
-
-        if (result != null) {
-            return result;
-        }
-
-        result = createEntity(cursor);
-        putIntoCache(result);
-        return result;
+    public EntityInfo<E> getEntityInfo() {
+        return entityInfo;
     }
 
-    private int getIdColumnIndex() {
-        if (idColumnIndex == -1) {
-            idColumnIndex = getProperties().indexOf(getIdProperty());
-        }
-        return idColumnIndex;
+    /**
+     * Returns all entities in DB.
+     * @return all entities
+     */
+    public List<E> selectAll() {
+        return ensureSelectAllQuery().queryList(null);
     }
 
-    private void allColumns(StringBuilder builder) {
-        for (Property property : getProperties()) {
-            builder.append(property.getColumnName()).append(',');
-        }
-        builder.setLength(builder.length() - 1);
-    }
-
-    public Cursor select(String where, String... params) {
-        return db.rawQuery(getSelect(where), params);
-    }
-
-    public List<E> selectList(String where, String... params) {
-        Cursor cursor = select(where, params);
-        try {
-            if (cursor.getCount() == 0) {
-                return Collections.emptyList();
-            }
-            List<E> result = new ArrayList<>(cursor.getCount());
-            while (cursor.moveToNext()) {
-                result.add(fromCursor(cursor));
-            }
-            return result;
-        } finally {
-            cursor.close();
-        }
-    }
-
-    @Nullable
-    public E selectUnique(String where, String... params) {
-        Cursor cursor = select(where, params);
-        try {
-            if (cursor.getCount() > 1) {
-                throw new IllegalStateException(cursor.getCount() + " elements matches \"" + where + "\"; " + Arrays.toString(params));
-            }
-            if (!cursor.moveToNext()) {
-                return null;
-            }
-            return fromCursor(cursor);
-        } finally {
-            cursor.close();
-        }
-    }
-
+    /**
+     * Inserts entity into DB. If id is autogenerated, it will be assigned.
+     * @param entity entity to insert
+     */
     public void insert(E entity) {
         SQLiteStatement insertStatement = ensureInsertQuery();
 
         executeInsert(entity, insertStatement);
-    }
-
-    private void executeInsert(E entity, SQLiteStatement insertStatement) {
-        bind(entity, insertStatement);
-        long id = insertStatement.executeInsert();
-        updateRowId(entity, id);
-        putIntoCache(entity);
     }
 
     public void insert(Iterable<E> elements) {
@@ -214,12 +173,6 @@ public abstract class Dao<E> {
         executeUpdate(element, updateStatement);
     }
 
-    private void executeUpdate(E element, SQLiteStatement updateStatement) {
-        bind(element, updateStatement);
-        bindId(element, updateStatement, getProperties().size() + 1);
-        updateStatement.execute();
-    }
-
     public void update(Iterable<E> elements) {
         SQLiteStatement updateStatement = ensureUpdateQuery();
 
@@ -245,7 +198,7 @@ public abstract class Dao<E> {
         SQLiteStatement sqLiteStatement = ensureDeleteQuery();
         bindId(entity, sqLiteStatement, 1);
         sqLiteStatement.execute();
-        removeFromCache(entity);
+        cache.remove(entity);
     }
 
     public void delete(Iterable<E> entities) {
@@ -270,25 +223,9 @@ public abstract class Dao<E> {
         }
     }
 
-    private void executeDelete(E entity, SQLiteStatement deleteStatement) {
-        bindId(entity, deleteStatement, 1);
-        deleteStatement.execute();
-        removeFromCache(entity);
-    }
-
     public void clear() {
-        db.execSQL("DELETE FROM '" + getTableName() + "'");
-        clearCache();
-    }
-
-    public void runInTx(Runnable runnable) {
-        db.beginTransaction();
-        try {
-            runnable.run();
-            db.setTransactionSuccessful();
-        } finally {
-            db.endTransaction();
-        }
+        db.execSQL("DELETE FROM \"" + getTableName() + "\"");
+        cache.clear();
     }
 
     public <T> T callInTx(Callable<T> callable) throws Exception {
@@ -303,59 +240,33 @@ public abstract class Dao<E> {
         }
     }
 
-    private SQLiteStatement ensureInsertQuery() {
-        if (insertStatement == null) {
-            tmp.append("INSERT INTO '")
-                    .append(getTableName())
-                    .append("' (");
-
-            allColumns(tmp);
-
-            tmp.append(") VALUES (");
-
-            int size = getProperties().size();
-            for (int i = 1; i < size; i++) {
-                tmp.append("?,");
-            }
-            tmp.append("?)");
-
-            insertStatement = db.compileStatement(recycle(tmp));
-        }
-        return insertStatement;
+    private void executeInsert(E entity, SQLiteStatement insertStatement) {
+        bind(entity, insertStatement);
+        long id = insertStatement.executeInsert();
+        updateRowId(entity, id);
+        cache.put(entity);
     }
 
-    private SQLiteStatement ensureUpdateQuery() {
-        if (updateStatement == null) {
-            tmp.append("UPDATE '")
-                    .append(getTableName())
-                    .append("' SET ");
-
-            for (Property property : getProperties()) {
-                tmp.append(property.getColumnName()).append(" = ?").append(',');
-            }
-
-            tmp.setLength(tmp.length() - 1);
-
-            tmp.append(" WHERE ")
-                    .append(getIdProperty().getColumnName())
-                    .append(" = ?");
-
-            updateStatement = db.compileStatement(recycle(tmp));
-        }
-        return updateStatement;
+    private void executeUpdate(E element, SQLiteStatement updateStatement) {
+        bind(element, updateStatement);
+        bindId(element, updateStatement, entityInfo.getProperties().size() + 1);
+        updateStatement.execute();
     }
 
-    private SQLiteStatement ensureDeleteQuery() {
-        if (deleteByIdStatement == null) {
-            tmp.append("DELETE FROM '")
-                    .append(getTableName())
-                    .append("' WHERE ")
-                    .append(getIdProperty().getColumnName())
-                    .append(" = ?");
+    private void executeDelete(E entity, SQLiteStatement deleteStatement) {
+        bindId(entity, deleteStatement, 1);
+        deleteStatement.execute();
+        cache.remove(entity);
+    }
 
-            deleteByIdStatement = db.compileStatement(recycle(tmp));
+    public void runInTx(Runnable runnable) {
+        db.beginTransaction();
+        try {
+            runnable.run();
+            db.setTransactionSuccessful();
+        } finally {
+            db.endTransaction();
         }
-        return deleteByIdStatement;
     }
 
     public void createTable() {
@@ -374,25 +285,9 @@ public abstract class Dao<E> {
 
     public void ensureProperty(Property property, int version) {
         String defaultValue = property.getDefaultValue() == null ? "" : " DEFAULT " + property.getDefaultValue();
-        db.execSQL("ALTER TABLE '" + getTableName() + "' " +
+        db.execSQL("ALTER TABLE \"" + getTableName() + "\" " +
                 "ADD COLUMN " + property.getColumnName() + " " + property.getColumnType() +
                 " " + property.getColumnExtraDefinition() + defaultValue);
-    }
-
-    private void ensureIndexes(int version) {
-        for (Property property : getProperties()) {
-            int indexedSince = property.getIndexedSince();
-            if (indexedSince == Property.NO_INDEX || indexedSince > version) {
-                continue;
-            }
-            ensureIndex(property, version);
-        }
-        for (CompoundIndex compoundIndex : getCompoundIndexes()) {
-            int indexedSince = compoundIndex.getSinceVersion();
-            if (indexedSince <= version) {
-                ensureIndex(compoundIndex, version);
-            }
-        }
     }
 
     public void ensureIndex(Property property, int version) {
@@ -404,6 +299,7 @@ public abstract class Dao<E> {
     }
 
     public void ensureIndex(CompoundIndex index, int version) {
+        StringBuilder tmp = new StringBuilder();
         tmp.append("CREATE");
         if (index.isUnique()) {
             tmp.append(" UNIQUE");
@@ -425,16 +321,106 @@ public abstract class Dao<E> {
         tmp.setLength(tmp.length() - 1);
         tmp.append(")");
 
-        db.execSQL(recycle(tmp));
+        db.execSQL(tmp.toString());
+    }
+
+    private SQLiteStatement ensureInsertQuery() {
+        if (insertStatement == null) {
+            StringBuilder tmp = new StringBuilder();
+
+            tmp.append("INSERT INTO \"")
+                    .append(getTableName())
+                    .append("\" (");
+
+            allColumns(entityInfo, tmp);
+
+            tmp.append(") VALUES (");
+
+            int size = entityInfo.getProperties().size();
+            for (int i = 1; i < size; i++) {
+                tmp.append("?,");
+            }
+            tmp.append("?)");
+
+            insertStatement = db.compileStatement(tmp.toString());
+        }
+        return insertStatement;
+    }
+
+    private SQLiteStatement ensureUpdateQuery() {
+        if (updateStatement == null) {
+            StringBuilder tmp = new StringBuilder();
+            tmp.append("UPDATE \"")
+                    .append(getTableName())
+                    .append("\" SET ");
+
+            for (Property property : entityInfo.getProperties()) {
+                tmp.append(property.getColumnName()).append(" = ?").append(',');
+            }
+
+            tmp.setLength(tmp.length() - 1);
+
+            tmp.append(" WHERE ")
+                    .append(entityInfo.getIdProperty().getColumnName())
+                    .append(" = ?");
+
+            updateStatement = db.compileStatement(tmp.toString());
+        }
+        return updateStatement;
+    }
+
+    private SQLiteStatement ensureDeleteQuery() {
+        if (deleteByIdStatement == null) {
+            String tmp = "DELETE FROM \"" + getTableName() + "\" WHERE " +
+                    entityInfo.getIdProperty().getColumnName() + " = ?";
+
+            deleteByIdStatement = db.compileStatement(tmp);
+        }
+        return deleteByIdStatement;
+    }
+
+    private QueryImpl<E> ensureSelectAllQuery() {
+        if (selectAllQuery == null) {
+            StringBuilder tmp = new StringBuilder();
+            tmp.append("SELECT ");
+
+            allColumns(entityInfo, tmp);
+
+            tmp.append(" FROM \"")
+                    .append(getTableName())
+                    .append("\"");
+
+            RowReader<E> rowReader = entityInfo.getCachedOrSimpleRowReader();
+            EntityIteratorFactory<E> factory = new SQLiteStringQueryEntityIteratorFactory<>(db, rowReader, tmp.toString());
+            selectAllQuery = new QueryImpl<>(factory);
+        }
+        return selectAllQuery;
+    }
+
+    private void ensureIndexes(int version) {
+        for (Property property : entityInfo.getProperties()) {
+            int indexedSince = property.getIndexedSince();
+            if (indexedSince == Property.NO_INDEX || indexedSince > version) {
+                continue;
+            }
+            ensureIndex(property, version);
+        }
+        for (CompoundIndex compoundIndex : getCompoundIndexes()) {
+            int indexedSince = compoundIndex.getSinceVersion();
+            if (indexedSince <= version) {
+                ensureIndex(compoundIndex, version);
+            }
+        }
     }
 
     private String createTable(boolean ifNotExists, int version) {
+        StringBuilder tmp = new StringBuilder();
         tmp.append("CREATE TABLE ");
         if (ifNotExists) {
             tmp.append("IF NOT EXISTS ");
         }
-        tmp.append('\'').append(getTableName()).append('\'').append('(');
-        for (Property property : getProperties()) {
+        tmp.append('\'').append(getTableName()).append('\'').append(" (");
+        for (Property property : entityInfo.getProperties()) {
             if (property.getSinceVersion() > version) {
                 continue;
             }
@@ -445,48 +431,17 @@ public abstract class Dao<E> {
         tmp.setLength(tmp.length() - 1);
         tmp.append(')');
 
-        return recycle(tmp);
+        return tmp.toString();
     }
 
     private String dropTable(boolean ifExists) {
+        StringBuilder tmp = new StringBuilder();
         tmp.append("DROP TABLE ");
         if (ifExists) {
             tmp.append("IF EXISTS ");
         }
         tmp.append('\'').append(getTableName()).append('\'');
-        return recycle(tmp);
-    }
-
-    private String getSelect(String where) {
-        if (where.isEmpty() && selectQuery != null) {
-            return selectQuery;
-        }
-        if (selectQuery == null) {
-            tmp.append("SELECT ");
-            allColumns(tmp);
-            tmp.append(" FROM ").append(getTableName()).append(' ');
-            selectQuery = tmp.toString();
-
-            if (where.isEmpty()) {
-                tmp.setLength(0);
-                return selectQuery;
-            }
-        } else {
-            tmp.append(selectQuery);
-        }
-
-        if (!where.isEmpty()) {
-            tmp.append("WHERE ");
-            tmp.append(where);
-        }
-
-        return recycle(tmp);
-    }
-
-    private static String recycle(StringBuilder tmp) {
-        String result = tmp.toString();
-        tmp.setLength(0);
-        return result;
+        return tmp.toString();
     }
 
 }

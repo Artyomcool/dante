@@ -22,12 +22,14 @@
 
 package com.github.artyomcool.dante;
 
+import com.github.artyomcool.dante.annotation.DbQueries;
 import com.github.artyomcool.dante.annotation.Entity;
 import com.github.artyomcool.dante.annotation.Migration;
-import com.github.artyomcool.dante.annotation.Queries;
+import com.github.artyomcool.dante.core.EntityInfo;
+import com.github.artyomcool.dante.core.dao.Dao;
 import com.github.artyomcool.dante.core.dao.DaoRegistry;
-import com.github.artyomcool.dante.core.dao.EntityInfo;
-import com.github.artyomcool.dante.core.dao.MigrationInfo;
+import com.github.artyomcool.dante.core.migration.MigrationInfo;
+import com.github.artyomcool.dante.core.query.DbQueriesBase;
 import com.squareup.javapoet.*;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -36,16 +38,21 @@ import javax.lang.model.element.*;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static com.github.artyomcool.dante.StreamUtils.join;
+import static com.github.artyomcool.dante.TypeNames.listOf;
+import static com.github.artyomcool.dante.TypeNames.mapOf;
+import static com.github.artyomcool.dante.TypeNames.parametrize;
 
 public class RegistryGenerator {
 
     private final RoundEnvironment roundEnvironment;
     private final ProcessingEnvironment processingEnv;
     private final List<GeneratorError> errors = new ArrayList<>();
-
-    private int maxVersion = 1;
 
     public RegistryGenerator(RoundEnvironment roundEnvironment, ProcessingEnvironment processingEnv) {
         this.roundEnvironment = roundEnvironment;
@@ -57,127 +64,166 @@ public class RegistryGenerator {
     }
 
     public void generate() throws IOException {
-        try {
-            Map<String, GeneratedDao> generatedEntities = new HashMap<>();
-            List<GeneratedQuery> generatedQueries = new ArrayList<>();
-            List<ClassName> generatedMigrations = new ArrayList<>();
+        GenerationResults generationResults = new GenerationResults();
 
-            roundEnvironment.getElementsAnnotatedWith(Entity.class).forEach(e -> {
-                try {
-                    DaoGenerator generator = new DaoGenerator(this, e);
-                    GeneratedDao generated = generator.generate();
-                    generatedEntities.put(generated.getQualifiedName(), generated);
+        roundEnvironment.getElementsAnnotatedWith(Entity.class).forEach(e -> {
+            EntityContext context = new EntityContext(this, e);
+            generationResults.entities.put(context.getClassName(), context);
+        });
 
-                    maxVersion = Math.max(maxVersion, generated.getMaxVersion());
-                } catch (IOException exception) {
-                    throw new UncheckedIOException(exception);
-                }
-            });
-            roundEnvironment.getElementsAnnotatedWith(Queries.class).forEach(e -> {
-                try {
-                    QueriesGenerator generator = new QueriesGenerator(this, e, generatedEntities);
-                    generatedQueries.add(generator.generate());
-                } catch (IOException ex) {
-                    throw new UncheckedIOException(ex);
-                }
-            });
-            roundEnvironment.getElementsAnnotatedWith(Migration.class).forEach(e -> {
-                try {
-                    MigrationGenerator generator = new MigrationGenerator(this, (TypeElement) e);
-                    GeneratedMigration generated = generator.generate();
-                    generatedMigrations.add(generated.getClassName());
+        roundEnvironment.getElementsAnnotatedWith(DbQueries.class).forEach(e ->
+                generationResults.queries.add(new QueriesGenerator(this, e, generationResults.entities).generate())
+        );
 
-                    maxVersion = Math.max(maxVersion, generated.getMaxVersion());
-                } catch (IOException ex) {
-                    throw new UncheckedIOException(ex);
-                }
-            });
+        roundEnvironment.getElementsAnnotatedWith(Migration.class).forEach(e ->
+                generationResults.migrations.add(new MigrationGenerator(e).generate())
+        );
 
-            MethodSpec.Builder initDaoBuilder = MethodSpec.methodBuilder("initDao")
-                    .addModifiers(Modifier.PROTECTED)
-                    .addAnnotation(Override.class)
-                    .returns(ParameterizedTypeName.get(ClassName.get(List.class), ParameterizedTypeName.get(ClassName.get(EntityInfo.class), WildcardTypeName.subtypeOf(Object.class))))
-                    .addParameter(sqliteDatabase(), "db")
-                    .addStatement("$T<$T<?>> result = new $T<$T<?>>()", List.class, EntityInfo.class, ArrayList.class, EntityInfo.class);
+        TypeSpec spec = generateRegistry(generationResults);
+        generationResults.extra.add(new GenerationResult("com.github.artyomcool.dante", spec, 0));
 
-            generatedEntities.values().forEach(e -> {
-                CodeBlock.Builder codeBuilder = CodeBlock.builder()
-                        .add("{\n")
-                        .indent()
-                        .addStatement("$T dao = new $T(db)", e.getDao(), e.getDao())
-                        .add("result.add(\n$>new $T<$T>($T.class, dao)", EntityInfo.class, e.getEntity(), e.getEntity());
-
-                codeBuilder.indent().indent();
-                generatedQueries.stream()
-                        .filter(q -> q.getDao().equals(e))
-                        .forEach(q -> codeBuilder.add("\n.query($T.class, new $T(dao))", q.getInterface(), q.getImplementation()));
-                codeBuilder.unindent().unindent().add("\n");
-
-                CodeBlock block = codeBuilder
-                        .add("$<);\n")
-                        .unindent()
-                        .add("}\n")
-                        .build();
-
-                initDaoBuilder.addCode(block);
-            });
-
-            initDaoBuilder
-                    .addStatement("return result");
-
-            MethodSpec.Builder initCustomMigrations = MethodSpec.methodBuilder("initCustomMigrations")
-                    .addModifiers(Modifier.PROTECTED)
-                    .addAnnotation(Override.class)
-                    .returns(ParameterizedTypeName.get(ClassName.get(List.class), WildcardTypeName.subtypeOf(MigrationInfo.class)));
-
-            boolean hasMigrations = !generatedMigrations.isEmpty();
-
-            if (hasMigrations) {
-                CodeBlock.Builder builder = CodeBlock.builder();
-                for (int i = 0; i < generatedMigrations.size() - 1; i++) {
-                    builder.add("new $T(),\n", generatedMigrations.get(i));
-                }
-                builder.add("new $T()", generatedMigrations.get(generatedMigrations.size() - 1));
-                CodeBlock code = builder.build();
-
-                initCustomMigrations.addStatement("return $T.asList($>\n$L$<\n)", Arrays.class, code);
-            } else {
-                initCustomMigrations.addStatement("return $T.emptyList()", Collections.class);
-            }
-
-
-            TypeSpec.Builder registryBuilder = TypeSpec.classBuilder("DefaultRegistry")
-                    .superclass(DaoRegistry.class)
-                    .addModifiers(Modifier.PUBLIC);
-            for (GeneratorError error : errors) {
-                registryBuilder.addStaticBlock(
-                        CodeBlock.builder()
-                                .addStatement("GEN_ERROR($S, $S)", error.getError(), getElementName(error.getElement()))
-                                .build()
-                );
-            }
-            TypeSpec spec = registryBuilder
-                    .addField(FieldSpec.builder(
-                            Integer.TYPE,
-                            "CURRENT_DB_VERSION",
-                            Modifier.PUBLIC,
-                            Modifier.STATIC,
-                            Modifier.FINAL)
-                            .initializer("$L", maxVersion)
-                            .build())
-                    .addMethod(initDaoBuilder.build())
-                    .addMethod(initCustomMigrations.build())
-                    .build();
-
-
-            JavaFile file = JavaFile.builder("com.github.artyomcool.dante", spec)
-                    .indent("    ")
-                    .build();
-
+        Collection<JavaFile> files = generationResults.all().map(this::writeResult).collect(Collectors.toList());
+        for (JavaFile file : files) {
             file.writeTo(processingEnv.getFiler());
-        } catch (UncheckedIOException e) {
-            throw e.getCause();
         }
+    }
+
+    private JavaFile writeResult(GenerationResult generationResult) {
+        return JavaFile.builder(generationResult.getPackageName(), generationResult.getTypeSpec())
+                .indent("    ")
+                .build();
+    }
+
+    private TypeSpec generateRegistry(GenerationResults generationResults) {
+        CodeBlock createEntityCodeBlock = build(generationResults.entities.values(), this::createEntity);
+
+        MethodSpec.Builder createEntityInfo = MethodSpec.methodBuilder("createEntityInfo")
+                .addModifiers(Modifier.PROTECTED)
+                .addAnnotation(Override.class)
+                .returns(listOf(parametrize(EntityInfo.class, WildcardTypeName.subtypeOf(Object.class))))
+                .addStatement("return $T.asList($>\n$L$<\n)", Arrays.class, createEntityCodeBlock);
+
+        CodeBlock createDaoCodeBlock = build(generationResults.entities.values(), this::createDao);
+
+        MethodSpec.Builder createDao = MethodSpec.methodBuilder("createDaoList")
+                .addModifiers(Modifier.PROTECTED)
+                .addAnnotation(Override.class)
+                .addParameter(TypeNames.SQLITE_DATABASE_CLASS, "db")
+                .returns(listOf(parametrize(Dao.class, WildcardTypeName.subtypeOf(Object.class))))
+                .addStatement("return $T.asList($>\n$L$<\n)", Arrays.class, createDaoCodeBlock);
+
+        CodeBlock createQueriesCodeBlock = build(generationResults.queries,
+                e -> createQueries(e, "result"), "");
+
+        TypeName returnType = mapOf(
+                parametrize(Class.class, WildcardTypeName.subtypeOf(Object.class)),
+                TypeName.get(DbQueriesBase.class)
+        );
+        MethodSpec.Builder createQueries = MethodSpec.methodBuilder("createQueries")
+                .addModifiers(Modifier.PROTECTED)
+                .addAnnotation(Override.class)
+                .addParameter(TypeNames.SQLITE_DATABASE_CLASS, "db")
+                .returns(returnType)
+                .addStatement("$T result = new $T<>()", returnType, HashMap.class)
+                .addCode(createQueriesCodeBlock)
+                .addStatement("return result");
+
+        CodeBlock createMigrationCodeBlock = build(generationResults.migrations, this::createMigration);
+
+        MethodSpec.Builder createCustomMigrations = MethodSpec.methodBuilder("createCustomMigrations")
+                .addModifiers(Modifier.PROTECTED)
+                .addAnnotation(Override.class)
+                .returns(listOf(WildcardTypeName.subtypeOf(MigrationInfo.class)))
+                .addStatement("return $T.asList($>\n$L$<\n)", Arrays.class, createMigrationCodeBlock);
+
+        TypeSpec.Builder registryBuilder = TypeSpec.classBuilder("DefaultRegistry")
+                .superclass(DaoRegistry.class)
+                .addModifiers(Modifier.PUBLIC);
+        for (GeneratorError error : errors) {
+            registryBuilder.addStaticBlock(
+                    CodeBlock.builder()
+                            .addStatement("GEN_ERROR($S, $S)", error.getError(), getElementName(error.getElement()))
+                            .build()
+            );
+        }
+
+        int maxVersion = generationResults.all()
+                .mapToInt(GenerationResult::getMaxVersion)
+                .max()
+                .orElse(1);
+
+        return registryBuilder
+                .addField(FieldSpec.builder(
+                        Integer.TYPE,
+                        "CURRENT_DB_VERSION",
+                        Modifier.PUBLIC,
+                        Modifier.STATIC,
+                        Modifier.FINAL)
+                        .initializer("$L", maxVersion)
+                        .build())
+                .addMethod(createEntityInfo.build())
+                .addMethod(createDao.build())
+                .addMethod(createQueries.build())
+                .addMethod(createCustomMigrations.build())
+                .build();
+    }
+
+    private <E> CodeBlock build(Collection<E> iterable, Function<E, CodeBlock> code) {
+        return build(iterable, code, ",\n");
+    }
+
+    private <E> CodeBlock build(Collection<E> iterable, Function<E, CodeBlock> code, String delimiter) {
+        CodeBlock.Builder builder = CodeBlock.builder();
+        join(iterable,
+                e -> builder.add(code.apply(e)),
+                e -> builder.add(delimiter)
+        );
+        return builder.build();
+    }
+
+    private CodeBlock createEntity(EntityContext e) {
+        CodeBlock.Builder codeBlock = CodeBlock.builder();
+        TypeName rowReader = e.accessRowReader().getTypeName();
+        TypeName cache = e.accessCache().getTypeName();
+
+        codeBlock.add("new $T<>($T.class)\n", EntityInfo.Builder.class, e.getTypeName())
+                .indent()
+                .add(".cache(new $T())\n", cache)
+                .add(".rowReader(new $T())\n", rowReader);
+
+        PropertyGenerationHelper helper = new PropertyGenerationHelper(this, e);
+
+        e.getFields().forEach(f -> {
+            if (e.getIdField() == f) {
+                codeBlock.add(".idProperty($L)\n", helper.buildIdProperty());
+            } else {
+                codeBlock.add(".property($L)\n", helper.buildProperty(f));
+            }
+        });
+
+        codeBlock.add(".build()");
+
+        return codeBlock.build();
+    }
+
+    private CodeBlock createDao(EntityContext e) {
+        return CodeBlock.builder()
+                .add("new $T(db, entity($T.class))", e.accessDao().getTypeName(), e.getTypeName())
+                .build();
+    }
+
+    private CodeBlock createQueries(QueriesGenerator.QueryGenerationResult result, String mapName) {
+        CodeBlock.Builder builder = CodeBlock.builder();
+        TypeName interfaceName = result.getInterfaceName();
+        TypeName typeName = result.getGenerationResult().getTypeName();
+        builder.addStatement("$L.put($T.class, new $T(db, this))", mapName, interfaceName, typeName);
+        return builder.build();
+    }
+
+    private CodeBlock createMigration(GenerationResult result) {
+        return CodeBlock.builder()
+                .add("new $T()", result.getTypeName())
+                .build();
     }
 
     private String getElementName(Element element) {
@@ -203,38 +249,6 @@ public class RegistryGenerator {
             prev = now;
         }
         return result.toString();
-    }
-
-    public static ClassName sqliteDatabase() {
-        return ClassName.get("android.database.sqlite", "SQLiteDatabase");
-    }
-
-    public static boolean isString(TypeName typeName) {
-        return typeName.toString().equals("java.lang.String");
-    }
-
-    public static boolean isByteArray(TypeName typeName) {
-        return typeName.toString().equals("byte[]");
-    }
-
-    public static boolean isPrimitiveWrapper(TypeName typeName) {
-        if (typeName.isPrimitive()) {
-            return false;
-        }
-        try {
-            typeName.unbox();
-            return true;
-        } catch (UnsupportedOperationException e) {
-            return false;
-        }
-    }
-
-    public static TypeName tryUnwrap(TypeName typeName) {
-        try {
-            return typeName.unbox();
-        } catch (UnsupportedOperationException e) {
-            return typeName;
-        }
     }
 
     private static PackageElement getPackageElement(Element type) {
@@ -265,4 +279,23 @@ public class RegistryGenerator {
         errors.add(new GeneratorError(element, error));
         System.err.println(element + ": " + error);
     }
+
+    private static class GenerationResults {
+
+        final Map<String, EntityContext> entities = new HashMap<>();
+        final List<QueriesGenerator.QueryGenerationResult> queries = new ArrayList<>();
+        final List<GenerationResult> migrations = new ArrayList<>();
+        final List<GenerationResult> extra = new ArrayList<>();
+
+        Stream<GenerationResult> all() {
+            return Stream.of(
+                    entities.values().stream().flatMap(s -> s.getResults().stream()),
+                    queries.stream().map(QueriesGenerator.QueryGenerationResult::getGenerationResult),
+                    migrations.stream(),
+                    extra.stream()
+            ).flatMap(s -> s);
+        }
+
+    }
+
 }

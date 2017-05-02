@@ -2,7 +2,7 @@ package com.github.artyomcool.dante.async;
 
 import com.github.artyomcool.dante.core.dao.DaoMaster;
 import com.github.artyomcool.dante.core.dao.DaoRegistry;
-import com.github.artyomcool.dante.core.dao.DatabaseOpener;
+import com.github.artyomcool.dante.core.db.DatabaseOpener;
 
 import javax.annotation.Nonnull;
 import javax.annotation.concurrent.ThreadSafe;

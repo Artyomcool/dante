@@ -22,7 +22,7 @@
 
 dependencies {
     compile project(':core')
-    provided 'com.google.android:android:4.1.1.4'
+    provided files('../mock-android-jar/android.jar')
 
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }
