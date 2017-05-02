@@ -22,14 +22,41 @@
 
 package com.github.artyomcool.dante.core;
 
+import com.github.artyomcool.dante.annotation.DbQueries;
 import com.github.artyomcool.dante.core.dao.Dao;
 
+/**
+ * Access point to the generated data.
+ */
 public interface Registry {
 
+    /**
+     * Returns queries interface implementation.
+     *
+     * @param clazz queries interface
+     * @param <T>   queries interface type
+     * @return queries interface implementation
+     * @see DbQueries
+     */
     <T> T queries(Class<T> clazz);
 
+    /**
+     * Returns dao for entity <b>T</b>.
+     *
+     * @param clazz entity class
+     * @param <E>   entity type
+     * @return dao for the entity
+     */
     <E> Dao<E> dao(Class<E> clazz);
 
+    /**
+     * Returns information context for the entity <b>T</b>.
+     *
+     * @param clazz entity class
+     * @param <E> entity type
+     * @return information context for the entity
+     * @see EntityInfo
+     */
     <E> EntityInfo<E> entity(Class<E> clazz);
 
 }

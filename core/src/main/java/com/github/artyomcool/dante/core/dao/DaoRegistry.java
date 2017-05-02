@@ -33,6 +33,9 @@ import java.util.*;
 
 import static java.lang.Math.max;
 
+/**
+ *
+ */
 public abstract class DaoRegistry implements Registry {
 
     private final List<EntityInfo<?>> entitiesList = new ArrayList<>();
@@ -48,6 +51,13 @@ public abstract class DaoRegistry implements Registry {
     private boolean initialized = false;
     private boolean daoInitialized = false;
 
+    /**
+     * Constructs new DaoRegistry. <b>Note:</b> call {@link #init(SQLiteDatabase)} to initialize it.
+     * {@link DaoMaster#init()} will call for you.
+     *
+     * @see #init(SQLiteDatabase)
+     * @see DaoMaster#init()
+     */
     public DaoRegistry() {
         List<EntityInfo<?>> entityInfos = createEntityInfo();
         for (EntityInfo<?> info : entityInfos) {
@@ -56,6 +66,11 @@ public abstract class DaoRegistry implements Registry {
         }
     }
 
+    /**
+     * Initialize registry.
+     *
+     * @param db database
+     */
     public void init(SQLiteDatabase db) {
         if (initialized) {
             throw new IllegalStateException("Already initialized");
@@ -76,6 +91,9 @@ public abstract class DaoRegistry implements Registry {
         initialized = true;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @SuppressWarnings("unchecked")
     @Override
     public <T> T queries(Class<T> clazz) {
@@ -83,6 +101,9 @@ public abstract class DaoRegistry implements Registry {
         return (T) queriesMap.get(clazz);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @SuppressWarnings("unchecked")
     @Override
     public <T> Dao<T> dao(Class<T> clazz) {
@@ -90,12 +111,20 @@ public abstract class DaoRegistry implements Registry {
         return (Dao<T>) daoMap.get(clazz);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     @SuppressWarnings("unchecked")
     public <E> EntityInfo<E> entity(Class<E> clazz) {
         return (EntityInfo<E>) entitiesMap.get(clazz);
     }
 
+    /**
+     * Returns current version of the scheme. Calculated as maximum of dao, properties and property's indexes versions.
+     *
+     * @return version of the scheme
+     */
     public int getVersion() {
         int version = 1;
         for (Dao<?> dao : daoList) {
@@ -109,28 +138,60 @@ public abstract class DaoRegistry implements Registry {
         return version;
     }
 
+    /**
+     * Returns dao list.
+     *
+     * @return dao list
+     */
     public List<Dao<?>> getDao() {
         checkInit(daoInitialized);
         return Collections.unmodifiableList(daoList);
     }
 
+    /**
+     * Returns custom migrations.
+     *
+     * @return custom migrations
+     */
     public List<MigrationInfo> getCustomMigrations() {
         checkInit(initialized);
         return Collections.unmodifiableList(customMigrations);
     }
+
+    /**
+     * Prepares information about all entities.
+     *
+     * @return list of EntityInfo
+     */
+    protected abstract List<EntityInfo<?>> createEntityInfo();
+
+    /**
+     * Prepares all dao.
+     *
+     * @param db database
+     * @return list of dao
+     */
+    protected abstract List<? extends Dao<?>> createDaoList(SQLiteDatabase db);
+
+    /**
+     * Prepares all queries.
+     *
+     * @param db database
+     * @return map of queries implementation
+     */
+    protected abstract Map<Class<?>, ? extends DbQueriesBase> createQueries(SQLiteDatabase db);
+
+    /**
+     * Prepares custom migrations.
+     *
+     * @return custom migrations
+     */
+    protected abstract List<? extends MigrationInfo> createCustomMigrations();
 
     private void checkInit(boolean initialized) {
         if (!initialized) {
             throw new IllegalStateException("Not initialized yet");
         }
     }
-
-    protected abstract List<EntityInfo<?>> createEntityInfo();
-
-    protected abstract List<? extends Dao<?>> createDaoList(SQLiteDatabase db);
-
-    protected abstract Map<Class<?>, ? extends DbQueriesBase> createQueries(SQLiteDatabase db);
-
-    protected abstract List<? extends MigrationInfo> createCustomMigrations();
 
 }

@@ -23,8 +23,11 @@
 package com.github.artyomcool.dante.core.dao;
 
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+import com.github.artyomcool.dante.annotation.DbQueries;
 import com.github.artyomcool.dante.core.EntityInfo;
 import com.github.artyomcool.dante.core.Property;
+import com.github.artyomcool.dante.core.Registry;
 import com.github.artyomcool.dante.core.db.DatabaseOpener;
 import com.github.artyomcool.dante.core.migration.Migration;
 import com.github.artyomcool.dante.core.migration.MigrationInfo;
@@ -32,20 +35,45 @@ import com.github.artyomcool.dante.core.migration.MigrationInfo;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DaoMaster {
+/**
+ * The entry point for Dante ORM. Works as {@link SQLiteOpenHelper} - opens DB, reads versions, creates scheme, runs
+ * migrations and stores new version.
+ * <b>NOTE:</b> you should call {@link #init()} before using. Therefore, it is safe to construct {@link DaoMaster}
+ * inside an arbitrary thread.
+ */
+public class DaoMaster implements Registry {
 
     private final DaoRegistry delegate;
     private final DatabaseOpener opener;
 
+    /**
+     * Constructs {@link DaoMaster} with a default {@link DaoRegistry} (com.github.artyomcool.dante.DefaultRegistry).
+     * It will be accessed through the Reflection API, so it should be preserved via Proguard configuration.
+     * <p>
+     * <b>NOTE:</b> you should call {@link #init()} before using.
+     *
+     * @param opener provider of {@link SQLiteDatabase}
+     */
     public DaoMaster(DatabaseOpener opener) {
         this(opener, defaultRegistry());
     }
 
+    /**
+     * Constructs {@link DaoMaster} with a custom {@link DaoRegistry}.
+     * <p>
+     * <b>NOTE:</b> you should call {@link #init()} before using.
+     *
+     * @param opener   provider of {@link SQLiteDatabase}
+     * @param delegate generated (or created manually) {@link DaoRegistry}
+     */
     public DaoMaster(DatabaseOpener opener, DaoRegistry delegate) {
         this.opener = opener;
         this.delegate = delegate;
     }
 
+    /**
+     * Performs the initialization. Time consuming operation that should not be called inside the UI thread.
+     */
     public void init() {
         SQLiteDatabase db = opener.open();
         db.beginTransaction();
@@ -67,6 +95,27 @@ public class DaoMaster {
         } finally {
             db.endTransaction();
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public <T> T queries(Class<T> clazz) {
+        return delegate.queries(clazz);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public <T> Dao<T> dao(Class<T> clazz) {
+        return delegate.dao(clazz);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public <T> EntityInfo<T> entity(Class<T> clazz) {
+        return delegate.entity(clazz);
     }
 
     private void onCreate() {
@@ -124,7 +173,7 @@ public class DaoMaster {
                         result.add(new Migration() {
                             @Override
                             public void migrate() {
-                                dao.ensureProperty(property, version);
+                                dao.addProperty(property);
                             }
                         });
                     }
@@ -132,7 +181,7 @@ public class DaoMaster {
                         result.add(new Migration() {
                             @Override
                             public void migrate() {
-                                dao.ensureIndex(property, version);
+                                dao.ensureIndex(property);
                             }
                         });
                     }
@@ -140,18 +189,6 @@ public class DaoMaster {
             }
         }
         return result;
-    }
-
-    public <T> T queries(Class<T> clazz) {
-        return delegate.queries(clazz);
-    }
-
-    public <T> Dao<T> dao(Class<T> clazz) {
-        return delegate.dao(clazz);
-    }
-
-    public <T> EntityInfo<T> entity(Class<T> clazz) {
-        return delegate.entity(clazz);
     }
 
     //TODO explain what android version has problem with multi-catch

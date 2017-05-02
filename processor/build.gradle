@@ -39,7 +39,6 @@ sourceCompatibility = 1.8
 dependencies {
     compile 'com.squareup:javapoet:1.2.0'
     compile 'io.reactivex:rxjava:1.1.8'
-    compile project(':annotation')
     compile project(':core')
 
     compile 'org.antlr:antlr4-runtime:4.5.1'

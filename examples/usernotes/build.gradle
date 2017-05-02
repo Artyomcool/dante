@@ -44,7 +44,6 @@ android {
 dependencies {
     compile 'com.android.support:recyclerview-v7:23.3.0'
 
-    compile 'com.github.artyomcool.dante:annotation:0.1.0-SNAPSHOT'
     compile 'com.github.artyomcool.dante:async:0.1.0-SNAPSHOT'
     apt 'com.github.artyomcool.dante:processor:0.1.0-SNAPSHOT'
 
