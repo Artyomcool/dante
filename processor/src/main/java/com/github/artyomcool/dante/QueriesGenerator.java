@@ -35,11 +35,10 @@ import org.antlr.v4.runtime.TokenStream;
 import org.antlr.v4.runtime.tree.ParseTreeWalker;
 import rx.Observable;
 
-import javax.lang.model.element.Element;
-import javax.lang.model.element.Modifier;
-import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.*;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
@@ -81,7 +80,7 @@ public class QueriesGenerator {
 
         methodsIn(queries.getEnclosedElements()).forEach(e -> {
             Query query = e.getAnnotation(Query.class);
-            TypeMirror entityType = getEntityType(e.getReturnType());
+            TypeMirror entityType = getEntityType(e);
 
             TypeMirror rawFactory;
             try {
@@ -204,7 +203,7 @@ public class QueriesGenerator {
 
             MethodSpec methodSpec = statementBuilder
                     .addCode("\n")
-                    .addCode(queryReturn(e.getReturnType(), methodName))
+                    .addCode(queryReturn(e, e.getReturnType()))
                     .build();
 
             fields.add(field);
@@ -219,6 +218,14 @@ public class QueriesGenerator {
         String packageName = getPackage(queries);
         GenerationResult generationResult = new GenerationResult(packageName, typeSpec, 0);
         return new QueryGenerationResult(generationResult, queriesTypeName);
+    }
+
+    private TypeMirror getEntityType(ExecutableElement e) {
+        Optional<VariableElement> acceptor = acceptorParam(e);
+        if (acceptor.isPresent()) {
+            return getFirstGenericArg(acceptor.get().asType());
+        }
+        return getEntityType(e.getReturnType());
     }
 
     private TypeMirror getEntityType(TypeMirror returnType) {
@@ -236,8 +243,30 @@ public class QueriesGenerator {
         return returnType;
     }
 
-    private CodeBlock queryReturn(TypeMirror returnType, String methodName) {
+    private Optional<VariableElement> acceptorParam(ExecutableElement method) {
+        String acceptorName = "com.github.artyomcool.dante.core.query.Acceptor";
+
+        for (VariableElement element : method.getParameters()) {
+            String type = element.asType().toString();
+            if (type.startsWith(acceptorName + "<") || type.equals(acceptorName)) {
+                return Optional.of(element);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private CodeBlock queryReturn(ExecutableElement method, TypeMirror returnType) {
+        String methodName = method.getSimpleName().toString();
         CodeBlock.Builder builder = CodeBlock.builder();
+
+        Optional<VariableElement> acceptor = acceptorParam(method);
+        if (acceptor.isPresent()) {
+            String name = acceptor.get().getSimpleName().toString();
+            String optionalReturn = method.getReturnType().getKind() == TypeKind.VOID ? "" : "return ";
+            builder.addStatement("$L$L.accept(params, $L)", optionalReturn, methodName, name);
+            return builder.build();
+        }
+
 
         if (isObservable(returnType)) {
             TypeMirror wrappedType = getFirstGenericArg(returnType);
@@ -250,7 +279,7 @@ public class QueriesGenerator {
                                     .addAnnotation(Override.class)
                                     .addModifiers(Modifier.PUBLIC)
                                     .returns(callableParam)
-                                    .addCode(queryReturn(wrappedType, methodName))
+                                    .addCode(queryReturn(method, wrappedType))
                                     .build()
                     )
                     .build();

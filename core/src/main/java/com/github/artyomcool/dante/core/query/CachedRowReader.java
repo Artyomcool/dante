@@ -15,12 +15,12 @@ public class CachedRowReader<E> implements RowReader<E>{
     }
 
     @Override
-    public E readEntity(Row cursor) {
-        E e = cache.get(cursor, idIndex);
+    public E readEntity(Row row) {
+        E e = cache.get(row, idIndex);
         if (e != null) {
             return e;
         }
-        e = reader.readEntity(cursor);
+        e = reader.readEntity(row);
         cache.put(e);
         return e;
     }

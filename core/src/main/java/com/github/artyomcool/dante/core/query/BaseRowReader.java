@@ -1,11 +1,27 @@
 package com.github.artyomcool.dante.core.query;
 
+/**
+ * Helper base class for row readers, providing method useful for generating readers.
+ * @param <E> entity
+ */
 public abstract class BaseRowReader<E> implements RowReader<E> {
 
+    /**
+     * Returns boolean from the row.
+     * @param row row
+     * @param column column index
+     * @return true, if {@link Row#getLong(int)} != 0
+     */
     public static boolean getBoolean(Row row, int column) {
         return row.getLong(column) != 0;
     }
 
+    /**
+     * Returns nullable boolean from the row.
+     * @param row row
+     * @param column column index
+     * @return
+     */
     public static Boolean getNullableBoolean(Row row, int column) {
         return row.isNull(column) ? null : getBoolean(row, column);
     }

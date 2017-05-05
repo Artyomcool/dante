@@ -3,10 +3,11 @@ package com.github.artyomcool.dante.core.cashe;
 import com.github.artyomcool.dante.core.query.Row;
 
 import javax.annotation.Nullable;
+import java.lang.ref.WeakReference;
 
 /**
  * Cache for identity of entities. Identity means that the same entity (entity with the same ID) will be represented
- * with the same object.
+ * with the same object. Implementations should use {@link WeakReference} to store the data to prevent memory leaks.
  *
  * @param <E> entity
  */
