@@ -218,7 +218,7 @@ class QueryTest extends BaseDanteTest {
                     public interface TestQuery {
 
                         @Query(where = "text=\$text")
-                        T byId(long id);
+                        T byText(String text);
 
                     }
 
@@ -231,16 +231,48 @@ class QueryTest extends BaseDanteTest {
 
         def dao = master.dao('test.T')
         def e = dao.newInstance()
-        e.id = 1
         dao.insert(e)
 
-        assert queries.byId(7) == null
+        assert dao.selectAll() == [e]
+        assert queries.byText(null) == e
+    }
 
-        e = dao.newInstance()
-        e.id = 7
+    @Test
+    void queryNullWithoutFix() {
+        DaoRegistry registry = generateRegistry("""
+                package test;
+
+                import java.util.List;
+                import com.github.artyomcool.dante.annotation.*;
+
+                @Entity
+                public class T {
+
+                    @Id
+                    Long id;
+                    String text;
+
+                    @DbQueries
+                    public interface TestQuery {
+
+                        @Query(where = "text=\$text", fixNullableEquals = false)
+                        T byText(String text);
+
+                    }
+
+                }
+            """
+        )
+        DaoMaster master = master(registry)
+
+        def queries = master.queries('test.T$TestQuery')
+
+        def dao = master.dao('test.T')
+        def e = dao.newInstance()
         dao.insert(e)
 
-        assert queries.byId(7) == e
+        assert dao.selectAll() == [e]
+        assert queries.byText(null) == null
     }
 
     @Test

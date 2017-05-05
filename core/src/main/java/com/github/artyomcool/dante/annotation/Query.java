@@ -35,4 +35,6 @@ public @interface Query {
 
     Class<? extends EntityIteratorFactory> factory() default EntityIteratorFactory.class;
 
+    boolean fixNullableEquals() default true;
+
 }

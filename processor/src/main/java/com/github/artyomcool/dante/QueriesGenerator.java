@@ -175,6 +175,28 @@ public class QueriesGenerator {
                     }
                     paramReplacements.add(new ParamReplacement(ctx.getStart().getStartIndex(), text));
                 }
+
+                @Override
+                public void enterReplacable_operator(SQLiteParser.Replacable_operatorContext ctx) {
+                    if (!query.fixNullableEquals()) {
+                        return;
+                    }
+                    String replacement;
+                    switch (ctx.getText()) {
+                        case "==":
+                        case "=":
+                            replacement = " IS ";
+                            break;
+                        case "!=":
+                        case "<>":
+                            replacement = " IS NOT ";
+                            break;
+                        default:
+                            generator.codeGenError(e, "Unknown sql operator: " + ctx.getText());
+                            return;
+                    }
+                    replacements.add(new TextReplacement(ctx.getStart().getStartIndex(), ctx.getStop().getStopIndex(), replacement));
+                }
             }, parser.parse());
 
             StringBuilder whereBuilder = new StringBuilder();

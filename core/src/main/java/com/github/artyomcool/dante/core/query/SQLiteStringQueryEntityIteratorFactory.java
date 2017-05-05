@@ -23,7 +23,10 @@ public class SQLiteStringQueryEntityIteratorFactory<E> implements EntityIterator
         final String[] strArgs = new String[length];
 
         for (int i = 0; i < length; i++) {
-            strArgs[i] = String.valueOf(args[i]);
+            Object arg = args[i];
+            if (arg != null) {
+                strArgs[i] = String.valueOf(arg);
+            }
         }
 
         return new RowEntityIterator<E>(new SQLiteStringQueryIterator(db, query, strArgs), rowReader) {
