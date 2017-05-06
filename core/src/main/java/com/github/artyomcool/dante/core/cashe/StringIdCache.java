@@ -4,7 +4,7 @@ import com.github.artyomcool.dante.core.query.Row;
 
 /**
  * Abstract implementation of {@link Cache} for {@link String} ids.
- * @param <E>
+ * @param <E> entity
  */
 public abstract class StringIdCache<E> implements Cache<E> {
 

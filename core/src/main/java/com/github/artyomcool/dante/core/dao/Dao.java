@@ -326,7 +326,7 @@ public abstract class Dao<E> {
      * All indexes will be created if it is not exists.
      * Designed to be used in {@link DaoMaster#onCreate()}.
      *
-     * @see {@link #ensureTable(int)}
+     * @see #ensureTable(int)
      */
     public void createTable() {
         db.execSQL(createTable(false, Integer.MAX_VALUE));

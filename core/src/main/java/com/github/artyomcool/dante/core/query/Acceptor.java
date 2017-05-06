@@ -29,7 +29,7 @@ public interface Acceptor<E, T> {
     void acceptNext(E next);
 
     /**
-     * Will be called after all entities was accepted by {@link #acceptNext(E)}.
+     * Will be called after all entities was accepted by {@link #acceptNext(Object)}.
      * Result will be returned from query method.
      * @return result of iterating entities, e.g. filtered entities, some aggregation, etc.
      */
