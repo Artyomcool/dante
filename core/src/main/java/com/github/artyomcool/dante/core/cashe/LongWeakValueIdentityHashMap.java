@@ -35,12 +35,14 @@ public class LongWeakValueIdentityHashMap<T> {
 
     private final ReferenceQueue<T> referenceQueue = new ReferenceQueue<>();
 
-    private WeakEntity[] table;
+    private WeakEntity<T>[] table;
 
     private int count;
 
     public LongWeakValueIdentityHashMap() {
-        table = new WeakEntity[16];
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        WeakEntity<T>[] weakEntities = new WeakEntity[16];
+        table = weakEntities;
     }
 
     @Nullable
@@ -48,12 +50,11 @@ public class LongWeakValueIdentityHashMap<T> {
         checkReferenceQueue();
 
         int index = index(key);
-        @SuppressWarnings("unchecked")
         WeakEntity<T> e = table[index];
         if (e == null) {
             table[index] = new WeakEntity<>(key, entity, referenceQueue);
         } else {
-            WeakEntity prev = null;
+            WeakEntity<T> prev = null;
             while (e != null) {
                 if (e.id == key) {
                     if (e.get() == entity) {
@@ -99,7 +100,7 @@ public class LongWeakValueIdentityHashMap<T> {
         int index = index(key);
         @SuppressWarnings("unchecked")
         WeakEntity<T> e = table[index];
-        WeakEntity prev = null;
+        WeakEntity<T> prev = null;
         while (e != null) {
             if (e.id == key) {
                 if (prev == null) {
@@ -121,11 +122,10 @@ public class LongWeakValueIdentityHashMap<T> {
         count = 0;
     }
 
-    private void remove(WeakEntity entity) {
+    private void remove(WeakEntity<?> entity) {
         int index = index(entity.id);
-        @SuppressWarnings("unchecked")
         WeakEntity<T> e = table[index];
-        WeakEntity prev = null;
+        WeakEntity<T> prev = null;
         while (e != null) {
             if (e == entity) {
                 if (prev == null) {
@@ -144,7 +144,7 @@ public class LongWeakValueIdentityHashMap<T> {
     private void checkReferenceQueue() {
         Reference<? extends T> cleared;
         while ((cleared = referenceQueue.poll()) != null) {
-            WeakEntity weakEntity = (WeakEntity) cleared;
+            WeakEntity<?> weakEntity = (WeakEntity<?>) cleared;
             remove(weakEntity);
         }
     }
@@ -153,11 +153,12 @@ public class LongWeakValueIdentityHashMap<T> {
         if (count < table.length * 3 / 4) {
             return;
         }
-        WeakEntity[] newTable = new WeakEntity[table.length * 2];
-        for (WeakEntity aTable : table) {
-            WeakEntity entity = aTable;
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        WeakEntity<T>[] newTable = new WeakEntity[table.length * 2];
+        for (WeakEntity<T> aTable : table) {
+            WeakEntity<T> entity = aTable;
             while (entity != null) {
-                WeakEntity next = entity.next;
+            WeakEntity<T> next = entity.next;
                 if (!entity.isEnqueued()) {
                     append(entity, newTable);
                 }
@@ -171,11 +172,11 @@ public class LongWeakValueIdentityHashMap<T> {
         return index(key, table);
     }
 
-    private static int index(long key, WeakEntity[] table) {
+    private static int index(long key, WeakEntity<?>[] table) {
         return hashCode(key) % table.length;
     }
 
-    private static void append(WeakEntity entity, WeakEntity[] table) {
+    private static <T> void append(WeakEntity<T> entity, WeakEntity<T>[] table) {
         int index = index(entity.id, table);
         entity.next = table[index];
         table[index] = entity;
